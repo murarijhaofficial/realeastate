@@ -14,7 +14,7 @@ import { pool, inTransaction } from './db.ts';
 import { authenticate, permissionsFor, requireProjectAccess } from './auth.ts';
 import { HttpError, asyncHandler } from './errors.ts';
 import { inventoryEvents, publishInventoryEvent } from './realtime.ts';
-import { crmBookingSchema, idSchema, parse, plotSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
+import { crmBookingSchema, idSchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
 
 const app = express();
 const api = express.Router();
@@ -433,21 +433,45 @@ api.post('/projects/:projectId/plots', ...authRoute(async (req, res) => {
 
 api.patch('/plots/:plotId', ...authRoute(async (req, res) => {
   const plotId = parse(idSchema, req.params.plotId);
-  const result = await pool.query('SELECT * FROM plots WHERE id = $1', [plotId]);
-  if (!result.rowCount) throw new HttpError(404, 'PLOT_NOT_FOUND', 'Plot not found.');
-  const current = result.rows[0];
-  await requireProjectAccess(req.user, current.project_id, pool);
   if (!permissionsFor(req.user.role).some((permission) => permission === '*' || permission === 'inventory:write')) throw new HttpError(403, 'FORBIDDEN', 'You cannot update this plot.');
-  const data = parse(plotSchema.partial(), req.body);
-  const allowed = ['plot_number', 'plot_type', 'area_sq_yard', 'area_sq_feet', 'length', 'width', 'direction', 'road_width', 'north_boundary', 'south_boundary', 'east_boundary', 'west_boundary', 'current_price'];
+  const data = parse(plotUpdateSchema, req.body);
+  const allowed = ['plot_number', 'plot_type', 'area_sq_yard', 'area_sq_feet', 'length', 'width', 'direction', 'road_width', 'north_boundary', 'south_boundary', 'east_boundary', 'west_boundary', 'current_price', 'status'];
   const fields = Object.entries(data).filter(([key]) => allowed.includes(key));
   if (!fields.length) throw new HttpError(400, 'VALIDATION_ERROR', 'Provide at least one plot field to update.');
   const values = fields.map(([, value]) => value);
   const assignments = fields.map(([key], index) => `${key} = $${index + 2}`).join(', ');
-  const updated = await pool.query(`UPDATE plots SET ${assignments}, updated_at = NOW() WHERE id = $1 RETURNING *`, [plotId, ...values]);
-  await pool.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'PLOT_UPDATED', 'inventory', 'plot', plotId]);
-  publishInventoryEvent(current.project_id, 'plot.updated', { plot_id: plotId, plot_number: updated.rows[0].plot_number });
-  res.json({ success: true, data: updated.rows[0] });
+  const updated = await inTransaction(async (client) => {
+    const found = await client.query('SELECT * FROM plots WHERE id = $1 FOR UPDATE', [plotId]);
+    if (!found.rowCount) throw new HttpError(404, 'PLOT_NOT_FOUND', 'Plot not found.');
+    const current = found.rows[0];
+    await requireProjectAccess(req.user, current.project_id, client);
+    if (['PENDING_APPROVAL', 'BOOKED', 'REGISTERED'].includes(current.status)) {
+      throw new HttpError(409, 'PLOT_LOCKED', 'This plot cannot be edited while a booking is pending or confirmed.');
+    }
+    const activeBooking = await client.query(
+      `SELECT 1 FROM bookings WHERE plot_id = $1
+       AND booking_status IN ('PENDING_APPROVAL','APPROVED','REGISTERED') LIMIT 1`,
+      [plotId],
+    );
+    if (activeBooking.rowCount) throw new HttpError(409, 'PLOT_LOCKED', 'This plot has an active booking and cannot be edited.');
+    const statusChanged = data.status !== undefined && data.status !== current.status;
+    const result = await client.query(
+      `UPDATE plots SET ${assignments}${statusChanged ? ', held_by = NULL, hold_expires_at = NULL' : ''},
+       updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [plotId, ...values],
+    );
+    if (statusChanged) {
+      await client.query(
+        `INSERT INTO plot_status_history (plot_id, previous_status, new_status, changed_by, reason)
+         VALUES ($1,$2,$3,$4,'Plot status updated in inventory')`,
+        [plotId, current.status, data.status, req.user.id],
+      );
+    }
+    await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'PLOT_UPDATED', 'inventory', 'plot', plotId]);
+    return { plot: result.rows[0], projectId: current.project_id };
+  });
+  publishInventoryEvent(updated.projectId, 'plot.updated', { plot_id: plotId, plot_number: updated.plot.plot_number });
+  res.json({ success: true, data: updated.plot });
 }));
 
 api.post('/plots/:plotId/hold', ...authRoute(async (req, res) => {

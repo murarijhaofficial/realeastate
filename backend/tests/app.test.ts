@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import app from '../src/app.ts';
-import { crmBookingSchema, parse, plotSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
+import { crmBookingSchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
 
 test('exposes backend service information and database health', async () => {
   const response = await request(app).get('/');
@@ -118,6 +118,13 @@ test('accepts non-negative plot inventory values and rejects negative prices', (
   assert.equal(plot.west_boundary, 'Internal road');
   assert.throws(() => parse(plotSchema, { plot_number: '01', current_price: -1 }));
   assert.throws(() => parse(plotSchema, { plot_number: '01', north_boundary: 'x'.repeat(101) }));
+});
+
+test('allows inventory status updates but never manual booking or approval statuses', () => {
+  assert.equal(parse(plotUpdateSchema, { status: 'AVAILABLE' }).status, 'AVAILABLE');
+  assert.equal(parse(plotUpdateSchema, { status: 'BLOCKED' }).status, 'BLOCKED');
+  assert.throws(() => parse(plotUpdateSchema, { status: 'BOOKED' }));
+  assert.throws(() => parse(plotUpdateSchema, { status: 'PENDING_APPROVAL' }));
 });
 
 test('requires a valid role and a bcrypt-safe strong password for team accounts', () => {

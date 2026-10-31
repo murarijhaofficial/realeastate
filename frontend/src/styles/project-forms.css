@@ -13,6 +13,9 @@
 .remove-initial-plot { grid-column: 4; justify-self: end; min-height: 24px; border: 0; background: transparent; color: #ad4646; font-size: 11px; }
 .project-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; padding: 14px; border: 1px solid #e8eeee; border-radius: 8px; background: #f8faf9; }
 .project-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.plot-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.plot-row-actions .primary-button,.plot-row-actions .secondary-button { min-height: 30px; padding: 5px 8px; font-size: 10px; white-space: nowrap; }
+.plot-locked,.form-help { color: var(--muted); font-size: 10px; }
 .project-details>div { display: grid; gap: 4px; min-width: 0; }
 .project-details span { color: var(--muted); font-size: 10px; }
 .project-details strong { overflow-wrap: anywhere; font-size: 11px; }

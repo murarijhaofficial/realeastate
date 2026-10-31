@@ -66,3 +66,20 @@ test('project editing, WordPress map details, and agent website requests stay co
   assert.match(api, /userId \?\? plot\.assigned_sales_user_id/);
   assert.match(api, /plot\.status !== 'AVAILABLE'/);
 });
+
+test('plot updates are editable before booking and booked status requires approval', async () => {
+  const app = await fs.readFile('src/main.tsx', 'utf8');
+  const projectsPage = await fs.readFile('src/pages/ProjectsPage.tsx', 'utf8');
+  const api = await fs.readFile('../backend/src/app.ts', 'utf8');
+  const validation = await fs.readFile('../backend/src/validation.ts', 'utf8');
+
+  assert.match(projectsPage, /data-edit-plot/);
+  assert.match(projectsPage, /data-book-plot/);
+  assert.match(projectsPage, /plot\.status === 'PENDING_APPROVAL' \|\| plot\.status === 'BOOKED'/);
+  assert.match(app, /method: plot \? 'PATCH' : 'POST'/);
+  assert.match(app, /name="status"><option value="">Keep current status/);
+  assert.match(app, /data\.status === ''\) delete data\.status/);
+  assert.match(validation, /status: z\.enum\(\['AVAILABLE', 'BLOCKED'\]\)\.optional\(\)/);
+  assert.match(api, /PLOT_LOCKED/);
+  assert.match(api, /decision === 'approve' \? 'BOOKED' : 'AVAILABLE'/);
+});

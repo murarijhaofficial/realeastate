@@ -43,6 +43,9 @@ export const plotSchema = z.object({
   west_boundary: z.string().trim().max(100).optional(),
   current_price: z.coerce.number().nonnegative().optional(),
 });
+export const plotUpdateSchema = plotSchema.partial().extend({
+  status: z.enum(['AVAILABLE', 'BLOCKED']).optional(),
+});
 export const projectCreateSchema = projectSchema.extend({
   initial_plots: z.array(plotSchema).max(500).optional(),
 });

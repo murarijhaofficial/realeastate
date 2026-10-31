@@ -46,7 +46,14 @@ async function renderApp() {
       const layouts: ProjectLayout[] = selected ? await api<ProjectLayout[]>(`/projects/${selected.id}/layouts`) : [];
       currentPlots = plots;
       currentLayout = layouts.find((layout) => layout.status === 'DRAFT') ?? layouts.find((layout) => layout.status === 'PUBLISHED');
-      body = projectsPage(projects, selected, plots, currentLayout, currentUser.role === 'ADMIN' || currentUser.role === 'PROJECT_MANAGER');
+      body = projectsPage(
+        projects,
+        selected,
+        plots,
+        currentLayout,
+        currentUser.role === 'ADMIN' || currentUser.role === 'PROJECT_MANAGER',
+        Boolean(can('inventory:write')),
+      );
       layoutImagePath = currentLayout?.image_url;
     }
     if (view === 'leads') body = leadsPage(await api<Lead[]>('/leads'));
@@ -90,6 +97,18 @@ function bindPageActions() {
     if (project) showProjectForm(project);
   });
   document.querySelector('#new-plot')?.addEventListener('click', showPlotForm);
+  document.querySelectorAll<HTMLButtonElement>('[data-edit-plot]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const plot = currentPlots.find((item) => item.id === button.dataset.editPlot);
+      if (plot) showPlotForm(plot);
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-book-plot]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const plot = currentPlots.find((item) => item.id === button.dataset.bookPlot);
+      if (plot?.status === 'AVAILABLE') showBookingRequestForm(plot);
+    });
+  });
   document.querySelector('#new-layout')?.addEventListener('click', () => createLayout(false));
   document.querySelector('#new-layout-revision')?.addEventListener('click', () => createLayout(true));
   document.querySelector('#upload-layout-image')?.addEventListener('click', () => document.querySelector<HTMLInputElement>('#layout-image-file')?.click());
@@ -342,35 +361,82 @@ function showProjectForm(project?: Project) {
   });
 }
 
-function showPlotForm() {
-  if (!can('inventory:write')) return showToast('You do not have permission to add inventory.', true);
+function showPlotForm(plot?: Plot) {
+  if (!can('inventory:write')) return showToast('You do not have permission to manage inventory.', true);
+  if (plot && ['PENDING_APPROVAL', 'BOOKED', 'REGISTERED'].includes(plot.status)) {
+    return showToast('This plot is locked while a booking is pending or confirmed.', true);
+  }
   const projectId = location.hash.split('/')[1] || projects[0]?.id;
   if (!projectId) return showToast('Create a project before adding plots.', true);
-  openDialog('Add plot', `
-    <label>Plot number<input required name="plot_number" maxlength="50" placeholder="e.g. A-101"></label>
-    <label>Plot type<input name="plot_type" maxlength="50" value="RESIDENTIAL"></label>
-    <label>Area (sq yd)<input name="area_sq_yard" type="number" min="0" step="0.01"></label>
-    <label>Area (sq ft)<input name="area_sq_feet" type="number" min="0" step="0.01"></label>
-    <label>Length<input name="length" type="number" min="0" step="0.01"></label>
-    <label>Width<input name="width" type="number" min="0" step="0.01"></label>
-    <label>Facing / direction<input name="direction" maxlength="20" placeholder="North"></label>
-    <label>Road width<input name="road_width" type="number" min="0" step="0.01"></label>
-    <label>North boundary<input name="north_boundary" maxlength="100" placeholder="Plot no. 5 / Road"></label>
-    <label>South boundary<input name="south_boundary" maxlength="100"></label>
-    <label>East boundary<input name="east_boundary" maxlength="100"></label>
-    <label>West boundary<input name="west_boundary" maxlength="100"></label>
-    <label class="full-width">Current price (₹)<input name="current_price" type="number" min="0" step="1"></label>
+  const field = (name: keyof Plot, label: string, type = 'text', options = '') => {
+    const raw = plot?.[name] ?? (name === 'plot_type' ? 'RESIDENTIAL' : '');
+    const value = escapeHtml(raw);
+    const defaults = type === 'number' ? 'min="0" step="0.01"' : options.includes('maxlength=') ? '' : 'maxlength="100"';
+    return `<label>${label}<input name="${name}" type="${type}" ${defaults} value="${value}" ${options}></label>`;
+  };
+  openDialog(plot ? `Edit plot ${escapeHtml(plot.plot_number)}` : 'Add plot', `
+    ${field('plot_number', 'Plot number', 'text', 'required maxlength="50"')}
+    ${field('plot_type', 'Plot type', 'text', 'maxlength="50"')}
+    ${field('area_sq_yard', 'Area (sq yd)', 'number')}
+    ${field('area_sq_feet', 'Area (sq ft)', 'number')}
+    ${field('length', 'Length', 'number')}
+    ${field('width', 'Width', 'number')}
+    ${field('direction', 'Facing / direction', 'text', 'maxlength="20" placeholder="North"')}
+    ${field('road_width', 'Road width', 'number')}
+    ${field('north_boundary', 'North boundary', 'text', 'placeholder="Plot no. 5 / Road"')}
+    ${field('south_boundary', 'South boundary')}
+    ${field('east_boundary', 'East boundary')}
+    ${field('west_boundary', 'West boundary')}
+    ${field('current_price', 'Current price (₹)', 'number')}
+    ${plot ? `<label>Change status<select name="status"><option value="">Keep current status (${escapeHtml(plot.status)})</option><option value="AVAILABLE">Available</option><option value="BLOCKED">Blocked</option></select></label><p class="form-help">Booked, registered, and pending-approval plots are locked. A booking request must be approved before its status becomes booked.</p>` : ''}
   `, async (form) => {
     const data: Record<string, unknown> = Object.fromEntries(form);
+    if (data.status === '') delete data.status;
     for (const key of ['area_sq_yard', 'area_sq_feet', 'length', 'width', 'road_width', 'current_price']) {
       if (data[key] === '') delete data[key];
       else if (data[key] !== undefined) data[key] = Number(data[key]);
     }
     for (const key of ['direction', 'north_boundary', 'south_boundary', 'east_boundary', 'west_boundary']) {
-      if (data[key] === '') delete data[key];
+      if (data[key] === '' && !plot) delete data[key];
     }
-    await api(`/projects/${projectId}/plots`, { method: 'POST', body: JSON.stringify(data) });
-  }, 'plot-dialog', 'Add plot', 'Plot added.');
+    await api(plot ? `/plots/${plot.id}` : `/projects/${projectId}/plots`, {
+      method: plot ? 'PATCH' : 'POST',
+      body: JSON.stringify(data),
+    });
+  }, 'plot-dialog', plot ? 'Save plot' : 'Add plot', plot ? 'Plot updated.' : 'Plot added.');
+}
+
+function showBookingRequestForm(plot: Plot) {
+  if (!can('bookings:write')) return showToast('You do not have permission to submit booking requests.', true);
+  if (plot.status !== 'AVAILABLE') return showToast('Only available plots can be submitted for booking approval.', true);
+  const projectId = projectIdFromHash();
+  if (!projectId) return showToast('Select a project before submitting a booking request.', true);
+  openDialog(`Submit booking request · Plot ${escapeHtml(plot.plot_number)}`, `
+    <p class="form-help">This request will place the plot in pending approval. A manager must approve it before its status becomes booked.</p>
+    <label>Customer full name<input required name="full_name" maxlength="150"></label>
+    <label>Mobile number<input required name="mobile" maxlength="20" pattern="[+()0-9 -]{7,20}"></label>
+    <label>Email address<input name="email" type="email" maxlength="255"></label>
+    <label>Booking amount (₹)<input name="booking_amount" type="number" min="0" step="1" value="0"></label>
+    <label class="full-width">Remarks<textarea name="remarks" rows="3" maxlength="1000"></textarea></label>
+  `, async (form) => {
+    if (plot.status !== 'AVAILABLE') throw new Error('This plot is no longer available.');
+    const customer: Record<string, unknown> = {
+      full_name: String(form.get('full_name')).trim(),
+      mobile: String(form.get('mobile')).trim(),
+      email: String(form.get('email') ?? '').trim(),
+    };
+    const bookingAmount = String(form.get('booking_amount') ?? '');
+    if (!customer.email) delete customer.email;
+    if (bookingAmount) customer.booking_amount = Number(bookingAmount);
+    await api('/bookings', {
+      method: 'POST',
+      body: JSON.stringify({
+        plot_id: plot.id,
+        customer,
+        remarks: String(form.get('remarks') ?? '').trim(),
+      }),
+    });
+  }, 'plot-dialog', 'Submit for approval', 'Booking request submitted.');
 }
 
 function showLeadForm() {

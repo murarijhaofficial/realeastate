@@ -90,6 +90,8 @@ The public inventory and booking page is available at `/live-booking-status` (al
 
 Administrators and project managers can edit project details and change its status on the **Projects & inventory** page. The WordPress integration is in [`wordpress-plugin/estatedesk-live-booking`](./wordpress-plugin/estatedesk-live-booking); it shows the published map, masked client names, hover details, and the same available-only request form. Accepted requests immediately mark the plot pending and appear in CRM bookings for staff assigned to that project.
 
+Users with inventory-write access can edit plot details and set an editable plot to Available or Blocked. Available plots can be submitted with customer and booking details to the approval queue; plots in pending approval or confirmed/registered states are locked against edits. Only an authorized manager's approval changes a pending plot to Booked.
+
 ## API
 
 The versioned API is served at `/api/v1`. Authenticated CRM requests use `Authorization: Bearer <token>`.
