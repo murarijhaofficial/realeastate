@@ -17,11 +17,42 @@
 .project-details strong { overflow-wrap: anywhere; font-size: 11px; }
 .project-details>p,.project-highlights { grid-column: 1 / -1; margin: 0; color: #465c6d; font-size: 12px; line-height: 1.6; }
 .project-highlights ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 20px; margin: 7px 0 0; padding-left: 18px; }
+.masterplan-panel { margin: 0 0 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.masterplan-heading { padding: 16px 16px 8px; }
+.masterplan-heading h3 { margin: 0; font-size: 14px; }
+.masterplan-heading p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+.masterplan-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 16px; }
+.masterplan-version { color: var(--muted); font-size: 11px; font-weight: 700; }
+.masterplan-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
+.masterplan-actions select { min-height: 36px; max-width: 180px; border: 1px solid #ccd9df; border-radius: 6px; padding: 0 8px; color: var(--ink); background: white; font: inherit; font-size: 11px; }
+.masterplan-actions button:disabled { cursor: not-allowed; opacity: .5; transform: none; }
+.masterplan-canvas { position: relative; height: min(45vw, 520px); min-height: 260px; overflow: hidden; background: #f3f5f2; }
+.masterplan-canvas svg { display: block; width: 100%; height: 100%; }
+.masterplan-canvas #masterplan-image { pointer-events: none; }
+.masterplan-canvas .masterplan-plot { stroke: white; stroke-width: 2; vector-effect: non-scaling-stroke; fill-opacity: .72; cursor: crosshair; }
+.masterplan-canvas .masterplan-label { fill: #102a43; stroke: white; stroke-width: 3px; paint-order: stroke; font-size: 18px; font-weight: 800; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.masterplan-canvas #masterplan-draft { fill: rgba(32, 132, 91, .35); stroke: #13754f; stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.masterplan-canvas svg.is-drawing { cursor: crosshair; }
+.masterplan-canvas p { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 24px; color: var(--muted); text-align: center; font-size: 12px; pointer-events: none; }
+.masterplan-message { min-height: 16px; margin: 0; padding: 4px 16px; color: var(--muted); font-size: 11px; }
+.masterplan-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 16px 13px; color: var(--muted); font-size: 10px; }
+.masterplan-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.masterplan-legend i { width: 9px; height: 9px; border-radius: 50%; background: #737d83; }
+.masterplan-legend .available { background: #39a66c; }
+.masterplan-legend .hold { background: #e5ad36; }
+.masterplan-legend .pending { background: #ed8a38; }
+.masterplan-legend .booked { background: #d95858; }
+.table-wrap td small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.project-dialog .initial-plot-row label { font-size: 10px; }
+.dialog.plot-dialog { width: min(100%, 760px); }
 @media (max-width: 720px) {
   .dialog.project-dialog { width: min(100%, 540px); }
   .initial-plot-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .remove-initial-plot { grid-column: 2; }
   .project-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .masterplan-toolbar { align-items: flex-start; flex-direction: column; }
+  .masterplan-actions { justify-content: flex-start; }
+  .masterplan-canvas { height: 64vw; min-height: 235px; }
 }
 @media (max-width: 420px) {
   .dialog.project-dialog { grid-template-columns: 1fr; }

@@ -32,6 +32,28 @@ export interface Plot {
   direction?: string;
   road_width?: number;
   current_price?: number;
+  north_boundary?: string;
+  south_boundary?: string;
+  east_boundary?: string;
+  west_boundary?: string;
+}
+export interface PlotGeometry {
+  type: 'Polygon';
+  coordinates: number[][][];
+}
+export interface LayoutPlot {
+  plot_id: string;
+  plot_number: string;
+  geometry: PlotGeometry;
+  status: string;
+}
+export interface ProjectLayout {
+  id: string;
+  layout_name: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  version_number: number;
+  image_url?: string;
+  plots: LayoutPlot[];
 }
 export interface Lead { id: string; customer_name: string; mobile: string; project_name: string; source: string; lead_status: string; created_at: string }
 export interface Booking { id: string; booking_code: string; project_name: string; plot_number: string; customer_name: string; booking_status: string; booking_amount?: number; submitted_at: string }

@@ -1,7 +1,7 @@
 import './styles/app.css';
 import './styles/project-forms.css';
-import { api, isAuthorized, login, logout } from './lib/api';
-import type { Booking, Dashboard, Lead, Plot, Project, User } from './lib/types';
+import { api, apiAsset, isAuthorized, login, logout } from './lib/api';
+import type { Booking, Dashboard, Lead, Plot, Project, ProjectLayout, User } from './lib/types';
 import { appShell, type View } from './components/AppShell';
 import { loginPage } from './pages/LoginPage';
 import { dashboardPage } from './pages/DashboardPage';
@@ -14,6 +14,11 @@ import { settingsPage } from './pages/SettingsPage';
 const root = document.querySelector<HTMLDivElement>('#root')!;
 let currentUser: User | null = null;
 let projects: Project[] = [];
+let currentPlots: Plot[] = [];
+let currentLayout: ProjectLayout | undefined;
+let masterplanDrawing = false;
+let masterplanPoints: [number, number][] = [];
+let masterplanImageObjectUrl: string | null = null;
 
 const showToast = (message: string, error = false) => { const toast = document.querySelector('#toast'); if (!toast) return; toast.textContent = message; toast.className = `toast show ${error ? 'error' : ''}`; window.setTimeout(() => { toast.className = 'toast'; }, 3500); };
 const viewFromHash = (): View => { const view = location.hash.split('/')[0].replace('#', ''); return ['dashboard', 'projects', 'leads', 'bookings', 'team', 'settings'].includes(view) ? view as View : 'dashboard'; };
@@ -23,14 +28,19 @@ async function renderApp() {
   if (!currentUser) return renderLogin();
   const view = viewFromHash();
   let body = '';
+  let layoutImagePath: string | undefined;
   try {
     if (view === 'dashboard') body = dashboardPage(await api<Dashboard>('/dashboard'));
     if (view === 'projects') {
       projects = await api<Project[]>('/projects');
       const selectedId = location.hash.split('/')[1] || projects[0]?.id;
       const selected = projects.find((project) => project.id === selectedId);
-      const plots = selected ? await api<Plot[]>(`/projects/${selected.id}/plots`) : [];
-      body = projectsPage(projects, selected, plots);
+      const plots: Plot[] = selected ? await api<Plot[]>(`/projects/${selected.id}/plots`) : [];
+      const layouts: ProjectLayout[] = selected ? await api<ProjectLayout[]>(`/projects/${selected.id}/layouts`) : [];
+      currentPlots = plots;
+      currentLayout = layouts.find((layout) => layout.status === 'DRAFT') ?? layouts.find((layout) => layout.status === 'PUBLISHED');
+      body = projectsPage(projects, selected, plots, currentLayout, currentUser.role === 'ADMIN' || currentUser.role === 'PROJECT_MANAGER');
+      layoutImagePath = currentLayout?.image_url;
     }
     if (view === 'leads') body = leadsPage(await api<Lead[]>('/leads'));
     if (view === 'bookings') body = bookingsPage(await api<Booking[]>('/bookings'), Boolean(can('bookings:approve')));
@@ -38,6 +48,11 @@ async function renderApp() {
     if (view === 'settings') body = settingsPage();
   } catch (error) { body = `<div class="error-panel"><h2>Unable to load this page</h2><p>${error instanceof Error ? error.message : 'Please refresh and try again.'}</p></div>`; }
   root.innerHTML = appShell(currentUser, view, body);
+  if (layoutImagePath) void loadMasterplanImage(layoutImagePath);
+  else {
+    if (masterplanImageObjectUrl) URL.revokeObjectURL(masterplanImageObjectUrl);
+    masterplanImageObjectUrl = null;
+  }
   bindShell();
   bindPageActions();
 }
@@ -63,8 +78,163 @@ function bindPageActions() {
   }));
   document.querySelector('#new-project')?.addEventListener('click', showProjectForm);
   document.querySelector('#new-plot')?.addEventListener('click', showPlotForm);
+  document.querySelector('#new-layout')?.addEventListener('click', () => createLayout(false));
+  document.querySelector('#new-layout-revision')?.addEventListener('click', () => createLayout(true));
+  document.querySelector('#upload-layout-image')?.addEventListener('click', () => document.querySelector<HTMLInputElement>('#layout-image-file')?.click());
+  document.querySelector<HTMLInputElement>('#layout-image-file')?.addEventListener('change', uploadLayoutImage);
+  document.querySelector('#draw-boundary')?.addEventListener('click', beginMasterplanDrawing);
+  document.querySelector<HTMLSelectElement>('#boundary-plot')?.addEventListener('change', (event) => {
+    const drawButton = document.querySelector<HTMLButtonElement>('#draw-boundary');
+    if (drawButton) {
+      drawButton.disabled = !(event.currentTarget as HTMLSelectElement).value;
+      const selectedPlot = currentPlots.find((plot) => plot.id === (event.currentTarget as HTMLSelectElement).value);
+      document.querySelector<HTMLElement>('#masterplan-message')!.textContent = selectedPlot
+        ? `Selected plot ${selectedPlot.plot_number} · ${selectedPlot.status}`
+        : '';
+    }
+  });
+  document.querySelector('#save-boundary')?.addEventListener('click', saveMasterplanBoundary);
+  document.querySelector('#cancel-boundary')?.addEventListener('click', cancelMasterplanDrawing);
+  document.querySelector('#publish-layout')?.addEventListener('click', publishMasterplan);
+  document.querySelector<SVGSVGElement>('#masterplan-map')?.addEventListener('click', handleMasterplanClick);
   document.querySelector('#new-lead')?.addEventListener('click', showLeadForm);
   document.querySelector('#invite-user')?.addEventListener('click', showUserForm);
+}
+
+async function loadMasterplanImage(imagePath: string) {
+  const mapImage = document.querySelector<SVGImageElement>('#masterplan-image');
+  if (!mapImage) return;
+  try {
+    const blob = await apiAsset(imagePath);
+    if (!mapImage.isConnected) return;
+    if (masterplanImageObjectUrl) URL.revokeObjectURL(masterplanImageObjectUrl);
+    masterplanImageObjectUrl = URL.createObjectURL(blob);
+    mapImage.setAttribute('href', masterplanImageObjectUrl);
+  } catch (error) {
+    const message = document.querySelector<HTMLElement>('#masterplan-message');
+    if (message) message.textContent = error instanceof Error ? error.message : 'The layout image could not be loaded.';
+  }
+}
+
+function projectIdFromHash() {
+  return location.hash.split('/')[1] || projects[0]?.id;
+}
+
+async function createLayout(revision: boolean) {
+  const projectId = projectIdFromHash();
+  if (!projectId) return showToast('Create a project before adding its master plan.', true);
+  try {
+    await api(`/projects/${projectId}/layouts${revision ? '/revisions' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ layout_name: `${projects.find((project) => project.id === projectId)?.project_name ?? 'Project'} master plan` }),
+    });
+    showToast(revision ? 'Draft revision created.' : 'Master plan created. Upload its image to start mapping plots.');
+    await renderApp();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Could not create the master plan.', true);
+  }
+}
+
+async function uploadLayoutImage(event: Event) {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  const projectId = projectIdFromHash();
+  if (!file || !projectId) return;
+  const data = new FormData();
+  data.append('image', file);
+  data.append('layout_name', file.name.replace(/\.[^.]+$/, ''));
+  try {
+    await api(`/projects/${projectId}/layouts/upload`, { method: 'POST', body: data });
+    showToast('Master plan image uploaded. Select a plot to trace its boundary.');
+    await renderApp();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Could not upload the master plan image.', true);
+  } finally {
+    input.value = '';
+  }
+}
+
+function beginMasterplanDrawing() {
+  const plotId = document.querySelector<HTMLSelectElement>('#boundary-plot')?.value;
+  if (!plotId) return showToast('Select the plot you want to draw on the master plan.', true);
+  masterplanDrawing = true;
+  masterplanPoints = [];
+  document.querySelector<HTMLButtonElement>('#draw-boundary')!.disabled = true;
+  document.querySelector<HTMLButtonElement>('#cancel-boundary')!.hidden = false;
+  document.querySelector<HTMLElement>('#masterplan-message')!.textContent = 'Click at least three points around this plot, then save its boundary.';
+  document.querySelector<SVGSVGElement>('#masterplan-map')?.classList.add('is-drawing');
+}
+
+function handleMasterplanClick(event: MouseEvent) {
+  const map = event.currentTarget as SVGSVGElement;
+  if (masterplanDrawing) {
+    const bounds = map.getBoundingClientRect();
+    masterplanPoints.push([
+      Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
+      Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+    ]);
+    renderMasterplanDraft();
+    document.querySelector<HTMLButtonElement>('#save-boundary')!.disabled = masterplanPoints.length < 3;
+    return;
+  }
+  const plotGroup = (event.target as Element).closest<SVGGElement>('[data-plot-id]');
+  if (!plotGroup) return;
+  const picker = document.querySelector<HTMLSelectElement>('#boundary-plot');
+  if (picker) picker.value = plotGroup.dataset.plotId ?? '';
+}
+
+function renderMasterplanDraft() {
+  const map = document.querySelector<SVGSVGElement>('#masterplan-map');
+  map?.querySelector('#masterplan-draft')?.remove();
+  if (!map || !masterplanPoints.length) return;
+  const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  polygon.id = 'masterplan-draft';
+  polygon.setAttribute('points', masterplanPoints.map(([x, y]) => `${x * 1000},${y * 650}`).join(' '));
+  map.append(polygon);
+}
+
+function cancelMasterplanDrawing() {
+  masterplanDrawing = false;
+  masterplanPoints = [];
+  document.querySelector('#masterplan-draft')?.remove();
+  document.querySelector<SVGSVGElement>('#masterplan-map')?.classList.remove('is-drawing');
+  const drawButton = document.querySelector<HTMLButtonElement>('#draw-boundary');
+  if (drawButton) drawButton.disabled = !document.querySelector<HTMLSelectElement>('#boundary-plot')?.value;
+  const saveButton = document.querySelector<HTMLButtonElement>('#save-boundary');
+  if (saveButton) saveButton.disabled = true;
+  const cancelButton = document.querySelector<HTMLButtonElement>('#cancel-boundary');
+  if (cancelButton) cancelButton.hidden = true;
+  const message = document.querySelector<HTMLElement>('#masterplan-message');
+  if (message) message.textContent = '';
+}
+
+async function saveMasterplanBoundary() {
+  const projectId = projectIdFromHash();
+  const plotId = document.querySelector<HTMLSelectElement>('#boundary-plot')?.value;
+  if (!currentLayout || !projectId || !plotId || masterplanPoints.length < 3) return;
+  const coordinates = [...masterplanPoints, masterplanPoints[0]];
+  try {
+    await api(`/layouts/${currentLayout.id}/plots/${plotId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ geometry: { type: 'Polygon', coordinates: [coordinates] } }),
+    });
+    showToast('Plot boundary saved.');
+    cancelMasterplanDrawing();
+    await renderApp();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Could not save this boundary.', true);
+  }
+}
+
+async function publishMasterplan() {
+  if (!currentLayout) return;
+  try {
+    await api(`/layouts/${currentLayout.id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+    showToast('Master plan published to the public booking page.');
+    await renderApp();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Could not publish the master plan.', true);
+  }
 }
 
 function openDialog(title: string, fields: string, submit: (form: FormData) => Promise<void>, className = '', submitLabel = 'Save changes', successMessage = 'Saved successfully.') {
@@ -142,6 +312,10 @@ function showProjectForm() {
       <label>Width<input data-plot-field="width" type="number" min="0" step="0.01"></label>
       <label>Facing / direction<input data-plot-field="direction" maxlength="20" placeholder="North"></label>
       <label>Road width<input data-plot-field="road_width" type="number" min="0" step="0.01"></label>
+      <label>North boundary<input data-plot-field="north_boundary" maxlength="100" placeholder="Plot no. 5 / Road"></label>
+      <label>South boundary<input data-plot-field="south_boundary" maxlength="100"></label>
+      <label>East boundary<input data-plot-field="east_boundary" maxlength="100"></label>
+      <label>West boundary<input data-plot-field="west_boundary" maxlength="100"></label>
       <label>Price (₹)<input data-plot-field="current_price" type="number" min="0" step="1"></label>
     `;
     row.querySelector('.remove-initial-plot')?.addEventListener('click', () => row.remove());
@@ -162,6 +336,10 @@ function showPlotForm() {
     <label>Width<input name="width" type="number" min="0" step="0.01"></label>
     <label>Facing / direction<input name="direction" maxlength="20" placeholder="North"></label>
     <label>Road width<input name="road_width" type="number" min="0" step="0.01"></label>
+    <label>North boundary<input name="north_boundary" maxlength="100" placeholder="Plot no. 5 / Road"></label>
+    <label>South boundary<input name="south_boundary" maxlength="100"></label>
+    <label>East boundary<input name="east_boundary" maxlength="100"></label>
+    <label>West boundary<input name="west_boundary" maxlength="100"></label>
     <label class="full-width">Current price (₹)<input name="current_price" type="number" min="0" step="1"></label>
   `, async (form) => {
     const data: Record<string, unknown> = Object.fromEntries(form);
@@ -169,7 +347,9 @@ function showPlotForm() {
       if (data[key] === '') delete data[key];
       else if (data[key] !== undefined) data[key] = Number(data[key]);
     }
-    if (data.direction === '') delete data.direction;
+    for (const key of ['direction', 'north_boundary', 'south_boundary', 'east_boundary', 'west_boundary']) {
+      if (data[key] === '') delete data[key];
+    }
     await api(`/projects/${projectId}/plots`, { method: 'POST', body: JSON.stringify(data) });
   }, 'plot-dialog', 'Add plot', 'Plot added.');
 }

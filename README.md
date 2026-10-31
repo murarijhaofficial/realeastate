@@ -66,7 +66,7 @@ The standard seed creates the Ratanpur project record only. No plot numbers, bou
 
 - Short-lived JWT sign-in with bcrypt password hashes, revocable sessions, role permissions, project assignment checks, rate-limited public endpoints, security headers, and structured API errors.
 - PostgreSQL migrations with UUID keys, fixed-precision financial values, status history, audit records, and a partial unique index preventing concurrent active bookings for a plot.
-- Project and plot administration, including location/legal metadata, public project highlights, and optional initial plot records with dimensions, facing, road width, and price. Layout image upload (JPEG/PNG/WebP; 10 MB limit), normalized SVG plot boundaries, draft/publish versions, and live status colors.
+- Project and plot administration, including location/legal metadata, public project highlights, optional initial plot records with dimensions, facing, road width, boundary neighbours, and price. Upload verified master-plan images, trace normalized SVG plot boundaries, and publish versioned layouts. Public plot maps show status-colored plots, hover details, and allow booking requests only for available plots.
 - Editable project metadata including type, land area, survey/location details, postal code, coordinates, description, and status.
 - Transactional plot holds and booking requests; only managers can approve/reject, and a submitter cannot approve their own booking.
 - Lead and customer capture, public website enquiry and booking-request APIs, and project-scoped inventory SSE events.
@@ -84,7 +84,7 @@ pnpm db:seed
 pnpm db:seed:demo
 ```
 
-Use the **Edit project details** action on the Projects & Inventory page to update a project's metadata. Sample plots, customers, and bookings are fictional; keep them separate from real operations.
+Use **Projects & inventory** to create a project and add plots with their areas, dimensions, facing, road width, neighbouring boundaries, and prices. Under **Project master plan**, upload the verified site-plan image, choose each plot, trace its boundary on the image, and save it. Publish is enabled only after a plan image is uploaded and every plot is mapped. Create a draft revision before changing a published plan. Use the **Edit project details** action to update project metadata. Sample plots, customers, and bookings are fictional; keep them separate from real operations.
 
 The public inventory and booking page is available at `/live-booking-status` (also `/booking`). It lists only active projects with published layouts. Visitors can review project location, land area, survey details, highlights, and plot inventory; select a plot on its published map or list; and submit a non-binding request for an available plot. Requests enter the manager approval queue and are not online payments or confirmed bookings. Publish verified project inventory before sharing this URL with customers.
 
@@ -99,7 +99,7 @@ The versioned API is served at `/api/v1`. Authenticated CRM requests use `Author
 - `GET|POST /projects/:projectId/plots`, `PATCH /plots/:plotId`
 - `POST /plots/:plotId/hold`, `POST /plots/:plotId/release-hold`, `GET /plots/:plotId/history`
 - `GET /projects/:projectId/layouts`, `POST /projects/:projectId/layouts/upload`
-- `POST /projects/:projectId/layouts/revisions` (copies the current published boundaries into a new draft)
+- `POST /projects/:projectId/layouts/revisions` (copies the latest layout boundaries into a new draft)
 - `PUT /layouts/:layoutId/plots/:plotId`, `POST /layouts/:layoutId/publish`
 - `GET /bookings`, `POST /bookings`, `POST /bookings/:bookingId/approve`, `POST /bookings/:bookingId/reject`
 - `GET|POST /leads`, `GET /customers`, `GET /dashboard`

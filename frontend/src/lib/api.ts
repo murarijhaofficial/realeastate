@@ -16,6 +16,14 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return body.data as T;
 }
 
+export async function apiAsset(path: string): Promise<Blob> {
+  const headers = new Headers();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${baseUrl}${path}`, { headers });
+  if (!response.ok) throw new Error('The project layout image could not be loaded.');
+  return response.blob();
+}
+
 export async function login(email: string, password: string) {
   const result = await api<{ token: string; user: User }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
   setToken(result.token);

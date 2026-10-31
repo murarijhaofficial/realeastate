@@ -34,6 +34,7 @@ test('project setup captures plot details and exposes project highlights publicl
   const app = await fs.readFile('src/main.tsx', 'utf8');
   const bookingPage = await fs.readFile('public/live-booking-status.html', 'utf8');
   const bookingScript = await fs.readFile('public/booking.js', 'utf8');
+  const projectsPage = await fs.readFile('src/pages/ProjectsPage.tsx', 'utf8');
 
   assert.match(app, /Initial plot inventory/);
   assert.match(app, /data-plot-field="current_price"/);
@@ -41,4 +42,9 @@ test('project setup captures plot details and exposes project highlights publicl
   assert.match(app, /name="highlights"/);
   assert.match(bookingPage, /project-highlights-list/);
   assert.match(bookingScript, /project\.highlights/);
+  assert.match(projectsPage, /Draw selected plot/);
+  assert.match(app, /saveMasterplanBoundary/);
+  assert.match(bookingScript, /pointerenter/);
+  assert.match(bookingScript, /if \(plot\.status === 'AVAILABLE'\) openBookingForm\(\)/);
+  assert.match(bookingScript, /plot\.client/);
 });

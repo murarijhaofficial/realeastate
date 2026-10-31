@@ -329,14 +329,18 @@ api.post('/projects', ...authRoute(async (req, res) => {
     if (initialPlots.length) {
       const plots = await client.query(
         `INSERT INTO plots
-          (project_id, plot_number, plot_type, area_sq_yard, area_sq_feet, length, width, direction, road_width, current_price)
-         SELECT $1, input.plot_number, COALESCE(input.plot_type, 'RESIDENTIAL'),
-           COALESCE(input.area_sq_yard, 0), COALESCE(input.area_sq_feet, 0), input.length, input.width,
-           input.direction, input.road_width, COALESCE(input.current_price, 0)
-         FROM jsonb_to_recordset($2::jsonb) AS input(
-           plot_number text, plot_type text, area_sq_yard numeric, area_sq_feet numeric,
-           length numeric, width numeric, direction text, road_width numeric, current_price numeric
-         )
+           (project_id, plot_number, plot_type, area_sq_yard, area_sq_feet, length, width, direction, road_width,
+            north_boundary, south_boundary, east_boundary, west_boundary, current_price)
+          SELECT $1, input.plot_number, COALESCE(input.plot_type, 'RESIDENTIAL'),
+            COALESCE(input.area_sq_yard, 0), COALESCE(input.area_sq_feet, 0), input.length, input.width,
+            input.direction, input.road_width, input.north_boundary, input.south_boundary,
+            input.east_boundary, input.west_boundary, COALESCE(input.current_price, 0)
+          FROM jsonb_to_recordset($2::jsonb) AS input(
+            plot_number text, plot_type text, area_sq_yard numeric, area_sq_feet numeric,
+            length numeric, width numeric, direction text, road_width numeric,
+            north_boundary text, south_boundary text, east_boundary text, west_boundary text,
+            current_price numeric
+          )
          RETURNING id`,
         [createdProject.id, JSON.stringify(initialPlots)],
       );
@@ -403,9 +407,17 @@ api.post('/projects/:projectId/plots', ...authRoute(async (req, res) => {
   const data = parse(plotSchema, req.body);
   const plot = await inTransaction(async (client) => {
     const result = await client.query(
-      `INSERT INTO plots (project_id, plot_number, plot_type, area_sq_yard, area_sq_feet, length, width, direction, road_width, current_price)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.params.projectId, data.plot_number, data.plot_type ?? 'RESIDENTIAL', data.area_sq_yard ?? 0, data.area_sq_feet ?? 0, data.length ?? null, data.width ?? null, data.direction ?? null, data.road_width ?? null, data.current_price ?? 0],
+      `INSERT INTO plots
+        (project_id, plot_number, plot_type, area_sq_yard, area_sq_feet, length, width, direction, road_width,
+         north_boundary, south_boundary, east_boundary, west_boundary, current_price)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [
+        req.params.projectId, data.plot_number, data.plot_type ?? 'RESIDENTIAL',
+        data.area_sq_yard ?? 0, data.area_sq_feet ?? 0, data.length ?? null, data.width ?? null,
+        data.direction ?? null, data.road_width ?? null, data.north_boundary ?? null,
+        data.south_boundary ?? null, data.east_boundary ?? null, data.west_boundary ?? null,
+        data.current_price ?? 0,
+      ],
     );
     await client.query(
       `INSERT INTO plot_status_history (plot_id, new_status, changed_by, reason)
@@ -427,7 +439,7 @@ api.patch('/plots/:plotId', ...authRoute(async (req, res) => {
   await requireProjectAccess(req.user, current.project_id, pool);
   if (!permissionsFor(req.user.role).some((permission) => permission === '*' || permission === 'inventory:write')) throw new HttpError(403, 'FORBIDDEN', 'You cannot update this plot.');
   const data = parse(plotSchema.partial(), req.body);
-  const allowed = ['plot_number', 'plot_type', 'area_sq_yard', 'area_sq_feet', 'length', 'width', 'direction', 'road_width', 'current_price'];
+  const allowed = ['plot_number', 'plot_type', 'area_sq_yard', 'area_sq_feet', 'length', 'width', 'direction', 'road_width', 'north_boundary', 'south_boundary', 'east_boundary', 'west_boundary', 'current_price'];
   const fields = Object.entries(data).filter(([key]) => allowed.includes(key));
   if (!fields.length) throw new HttpError(400, 'VALIDATION_ERROR', 'Provide at least one plot field to update.');
   const values = fields.map(([, value]) => value);
@@ -538,16 +550,33 @@ async function createLayout(req, res) {
   parse(idSchema, req.params.projectId);
   await requireProjectAccess(req.user, req.params.projectId, pool);
   const layout = await inTransaction(async (client) => {
+    if (req.file) {
+      const draft = await client.query(
+        `SELECT id FROM layouts WHERE project_id = $1 AND status = 'DRAFT'
+         ORDER BY version_number DESC LIMIT 1 FOR UPDATE`,
+        [req.params.projectId],
+      );
+      if (draft.rowCount) {
+        const updated = await client.query(
+          `UPDATE layouts SET image_url = $2, image_width = $3, image_height = $4
+           WHERE id = $1 RETURNING *`,
+          [draft.rows[0].id, `/uploads/${req.file.filename}`, Number(req.body.image_width) || null, Number(req.body.image_height) || null],
+        );
+        await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'LAYOUT_IMAGE_UPDATED', 'layouts', 'layout', updated.rows[0].id]);
+        return updated.rows[0];
+      }
+    }
     const result = await client.query(
       `INSERT INTO layouts (project_id, layout_name, image_url, image_width, image_height, version_number, created_by)
-       SELECT $1, $2, $3, $4, $5, COALESCE(MAX(version_number), 0) + 1, $6
-       FROM layouts WHERE project_id = $1 RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5,
+         (SELECT COALESCE(MAX(version_number), 0) + 1 FROM layouts WHERE project_id = $1), $6)
+       RETURNING *`,
       [req.params.projectId, req.body.layout_name ?? 'Project layout', req.file ? `/uploads/${req.file.filename}` : null, Number(req.body.image_width) || null, Number(req.body.image_height) || null, req.user.id],
     );
     const previous = await client.query(
-      `SELECT id FROM layouts WHERE project_id = $1 AND status IN ('DRAFT','PUBLISHED')
+      `SELECT id FROM layouts WHERE project_id = $1 AND id <> $2 AND status IN ('DRAFT','PUBLISHED')
        ORDER BY version_number DESC LIMIT 1`,
-      [req.params.projectId],
+      [req.params.projectId, result.rows[0].id],
     );
     if (previous.rowCount) {
       await client.query(
@@ -847,7 +876,7 @@ api.get('/public/projects/:projectId', asyncHandler(async (req, res) => {
 api.get('/public/projects/:projectId/layout', asyncHandler(async (req, res) => {
   const projectId = parse(idSchema, req.params.projectId);
   const result = await pool.query(
-    `SELECT l.id, l.layout_name, l.version_number,
+    `SELECT l.id, l.layout_name, l.version_number, l.image_url, l.image_width, l.image_height,
       COALESCE(json_agg(json_build_object(
         'plot_id', pl.plot_id, 'plot_number', p.plot_number, 'geometry', pl.geometry
       ) ORDER BY pl.display_order) FILTER (WHERE pl.id IS NOT NULL), '[]'::json) AS plots
@@ -880,9 +909,26 @@ api.get('/public/projects/:projectId/plots', asyncHandler(async (req, res) => {
         'id', pl.id, 'plot_number', pl.plot_number, 'area_sq_yard', pl.area_sq_yard,
         'area_sq_feet', pl.area_sq_feet, 'length', pl.length, 'width', pl.width, 'road_width', pl.road_width,
         'plot_type', pl.plot_type, 'direction', pl.direction,
-        'price', pl.current_price, 'status', pl.status
+        'north_boundary', pl.north_boundary, 'south_boundary', pl.south_boundary,
+        'east_boundary', pl.east_boundary, 'west_boundary', pl.west_boundary,
+        'price', pl.current_price, 'status', pl.status,
+        'client', CASE WHEN pl.status IN ('BOOKED','REGISTERED') AND booking_client.full_name IS NOT NULL
+          THEN CASE WHEN char_length(booking_client.full_name) <= 2
+            THEN repeat('*', char_length(booking_client.full_name))
+            ELSE left(booking_client.full_name, 1)
+              || repeat('*', char_length(booking_client.full_name) - 2)
+              || right(booking_client.full_name, 1)
+          END
+          ELSE NULL
+        END
       ) ORDER BY pl.plot_number) FILTER (WHERE pl.id IS NOT NULL), '[]'::json) AS plots
      FROM projects pr LEFT JOIN plots pl ON pl.project_id = pr.id
+     LEFT JOIN LATERAL (
+      SELECT c.full_name FROM bookings b
+      JOIN customers c ON c.id = b.customer_id
+      WHERE b.plot_id = pl.id AND b.booking_status IN ('APPROVED','REGISTERED')
+      ORDER BY b.approved_at DESC NULLS LAST, b.submitted_at DESC LIMIT 1
+     ) booking_client ON TRUE
      WHERE pr.id = $1 AND pr.status = 'ACTIVE'
        AND EXISTS (SELECT 1 FROM layouts l WHERE l.project_id = pr.id AND l.status = 'PUBLISHED')
      GROUP BY pr.id`,

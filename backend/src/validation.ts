@@ -37,6 +37,10 @@ export const plotSchema = z.object({
   width: z.coerce.number().nonnegative().optional(),
   direction: z.string().trim().max(20).optional(),
   road_width: z.coerce.number().nonnegative().optional(),
+  north_boundary: z.string().trim().max(100).optional(),
+  south_boundary: z.string().trim().max(100).optional(),
+  east_boundary: z.string().trim().max(100).optional(),
+  west_boundary: z.string().trim().max(100).optional(),
   current_price: z.coerce.number().nonnegative().optional(),
 });
 export const projectCreateSchema = projectSchema.extend({

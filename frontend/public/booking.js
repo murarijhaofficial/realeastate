@@ -160,33 +160,53 @@ function renderMap() {
     return boundary?.length ? [{ plot, boundary }] : [];
   });
   const mapEmpty = $('#map-empty');
+  const hasPlanImage = Boolean(state.layout.image_url);
   mapEmpty.classList.toggle('hidden', plotsWithGeometry.length > 0);
-  svg.classList.toggle('hidden', plotsWithGeometry.length === 0);
-  if (!plotsWithGeometry.length) return;
+  svg.classList.toggle('hidden', plotsWithGeometry.length === 0 && !hasPlanImage);
+  if (!plotsWithGeometry.length && !hasPlanImage) return;
 
   const ns = 'http://www.w3.org/2000/svg';
   const fragment = document.createDocumentFragment();
-  const background = document.createElementNS(ns, 'rect');
-  background.setAttribute('width', '1000');
-  background.setAttribute('height', '650');
-  background.setAttribute('fill', '#f4f3ea');
-  fragment.append(background);
+  if (hasPlanImage) {
+    const image = document.createElementNS(ns, 'image');
+    image.setAttribute('href', apiUrl(state.layout.image_url));
+    image.setAttribute('width', '1000');
+    image.setAttribute('height', '650');
+    image.setAttribute('preserveAspectRatio', 'none');
+    fragment.append(image);
+  } else {
+    const background = document.createElementNS(ns, 'rect');
+    background.setAttribute('width', '1000');
+    background.setAttribute('height', '650');
+    background.setAttribute('fill', '#f4f3ea');
+    fragment.append(background);
+  }
 
   for (const { plot, boundary } of plotsWithGeometry) {
     if (!boundary.every((point) => Array.isArray(point) && point.length === 2
       && point.every((coordinate) => Number.isFinite(Number(coordinate)) && Number(coordinate) >= 0 && Number(coordinate) <= 1))) continue;
     const polygon = document.createElementNS(ns, 'polygon');
     polygon.setAttribute('points', boundary.map(([x, y]) => `${Number(x) * 1000},${Number(y) * 650}`).join(' '));
-    polygon.setAttribute('class', `site-plot plot-${statusClass[plot.status] ?? 'unavailable'}${state.selectedPlot?.id === plot.id ? ' is-selected' : ''}`);
+    const mapStatus = { AVAILABLE: 'available', HOLD: 'hold', PENDING_APPROVAL: 'pending', BOOKED: 'booked', REGISTERED: 'registered', BLOCKED: 'blocked' }[plot.status] ?? 'blocked';
+    polygon.setAttribute('class', `site-plot plot-${mapStatus}${state.selectedPlot?.id === plot.id ? ' is-selected' : ''}`);
     polygon.setAttribute('tabindex', '0');
     polygon.setAttribute('role', 'button');
     polygon.setAttribute('aria-label', `Plot ${plot.plot_number}, ${statusNames[plot.status] ?? 'Unavailable'}${plot.status === 'AVAILABLE' ? ', select to request booking' : ''}`);
     polygon.dataset.plotId = plot.id;
-    polygon.addEventListener('click', () => selectPlot(plot.id));
+    polygon.addEventListener('pointerenter', (event) => showMapTooltip(plot, event));
+    polygon.addEventListener('pointermove', (event) => positionMapTooltip(event));
+    polygon.addEventListener('pointerleave', hideMapTooltip);
+    polygon.addEventListener('focus', () => showMapTooltip(plot));
+    polygon.addEventListener('blur', hideMapTooltip);
+    polygon.addEventListener('click', () => {
+      selectPlot(plot.id);
+      if (plot.status === 'AVAILABLE') openBookingForm();
+    });
     polygon.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         selectPlot(plot.id);
+        if (plot.status === 'AVAILABLE') openBookingForm();
       }
     });
     fragment.append(polygon);
@@ -201,6 +221,43 @@ function renderMap() {
     fragment.append(label);
   }
   svg.append(fragment);
+}
+
+function showMapTooltip(plot, event) {
+  const tooltip = $('#map-tooltip');
+  const details = [
+    ['Status', statusNames[plot.status] ?? 'Unavailable'],
+    ['Plot', plot.plot_number],
+    ['Area', formatArea(plot.area_sq_yard)],
+    ['Area (sq. ft.)', formatArea(plot.area_sq_feet, 'sq ft')],
+    ['Dimensions', plot.length && plot.width ? `${formatArea(plot.length, 'ft')} × ${formatArea(plot.width, 'ft')}` : '—'],
+    ['Road width', formatArea(plot.road_width, 'ft')],
+    ['Facing', plot.direction || '—'],
+    ['North', plot.north_boundary || '—'],
+    ['South', plot.south_boundary || '—'],
+    ['East', plot.east_boundary || '—'],
+    ['West', plot.west_boundary || '—'],
+    ...(plot.client ? [['Client', plot.client]] : []),
+    ['Price', formatCurrency(plot.price)],
+  ];
+  tooltip.innerHTML = `<strong>Plot ${escapeHTML(plot.plot_number)}</strong>${details.map(([label, value]) => `<span><b>${escapeHTML(label)}</b><span>${escapeHTML(value)}</span></span>`).join('')}${plot.status === 'AVAILABLE' ? '<small>Click to request this plot</small>' : ''}`;
+  tooltip.hidden = false;
+  if (event) positionMapTooltip(event);
+  else {
+    tooltip.style.left = '50%';
+    tooltip.style.top = '50%';
+  }
+}
+
+function positionMapTooltip(event) {
+  const tooltip = $('#map-tooltip');
+  const bounds = $('#public-map').getBoundingClientRect();
+  tooltip.style.left = `${Math.max(8, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth - 8))}px`;
+  tooltip.style.top = `${Math.max(8, Math.min(event.clientY - bounds.top + 12, bounds.height - tooltip.offsetHeight - 8))}px`;
+}
+
+function hideMapTooltip() {
+  $('#map-tooltip').hidden = true;
 }
 
 function renderPlots() {

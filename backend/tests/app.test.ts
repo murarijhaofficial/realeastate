@@ -106,9 +106,18 @@ test('validates project highlights and initial plot inventory', () => {
 });
 
 test('accepts non-negative plot inventory values and rejects negative prices', () => {
-  const plot = parse(plotSchema, { plot_number: '01', area_sq_yard: '400', current_price: '2500000' });
+  const plot = parse(plotSchema, {
+    plot_number: '01',
+    area_sq_yard: '400',
+    current_price: '2500000',
+    north_boundary: 'Plot no. 5',
+    west_boundary: 'Internal road',
+  });
   assert.equal(plot.area_sq_yard, 400);
+  assert.equal(plot.north_boundary, 'Plot no. 5');
+  assert.equal(plot.west_boundary, 'Internal road');
   assert.throws(() => parse(plotSchema, { plot_number: '01', current_price: -1 }));
+  assert.throws(() => parse(plotSchema, { plot_number: '01', north_boundary: 'x'.repeat(101) }));
 });
 
 test('requires a valid role and a bcrypt-safe strong password for team accounts', () => {

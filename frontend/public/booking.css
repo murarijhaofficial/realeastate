@@ -91,8 +91,19 @@ a { color: inherit; }
 .public-map-wrap svg { width: 100%; height: 100%; display: block; }
 .site-plot { fill: #8ac49b; stroke: #fff; stroke-width: 3; vector-effect: non-scaling-stroke; cursor: pointer; transition: fill .15s, stroke .15s, opacity .15s; }
 .site-plot:hover, .site-plot:focus, .site-plot.is-selected { fill: #63ad7d; stroke: #245c3e; stroke-width: 3; outline: none; }
+.site-plot.plot-booked { fill: #d66b65; }.site-plot.plot-registered { fill: #798bd0; }.site-plot.plot-blocked { fill: #a4aaa5; }
+.site-plot.plot-booked:hover, .site-plot.plot-booked:focus, .site-plot.plot-booked.is-selected { fill: #c75852; }
+.site-plot.plot-registered:hover, .site-plot.plot-registered:focus, .site-plot.plot-registered.is-selected { fill: #6578bc; }
+.site-plot.plot-blocked:hover, .site-plot.plot-blocked:focus, .site-plot.plot-blocked.is-selected { fill: #8b9490; }
 .plot-hold { fill: #ecc76f; }.plot-pending { fill: #e8a56b; }.plot-unavailable { fill: #c6cbc5; }
 .site-plot-label { fill: #274133; font: 700 16px "DM Sans",sans-serif; pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+.map-tooltip { position: absolute; z-index: 4; width: min(250px, calc(100% - 16px)); max-height: calc(100% - 16px); overflow: auto; padding: 10px 12px; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; color: #fff; background: #282b29; box-shadow: 0 8px 24px rgba(0,0,0,.24); pointer-events: none; font-size: 10px; }
+.map-tooltip[hidden] { display: none; }
+.map-tooltip>strong { display: block; margin-bottom: 5px; color: #ffea54; font-size: 12px; }
+.map-tooltip>span { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 7px; padding: 2px 0; }
+.map-tooltip>span>b { color: #f0e856; font-weight: 600; }
+.map-tooltip>span>span { overflow-wrap: anywhere; text-align: right; }
+.map-tooltip>small { display: block; margin-top: 6px; color: #9de0ac; }
 .map-empty { position: absolute; inset: 20px; display: grid; place-items: center; padding: 30px; color: #7a897e; font-size: 11px; line-height: 1.7; text-align: center; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; padding: 13px 17px; border-top: 1px solid #edf0eb; }
 .map-legend span { display: inline-flex; align-items: center; gap: 6px; color: #718076; font-size: 8px; }
