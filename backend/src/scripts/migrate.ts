@@ -1,9 +1,10 @@
-import 'dotenv/config';
+import '../env.ts';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { pool } from '../db.js';
+import { fileURLToPath } from 'node:url';
+import { pool } from '../db.ts';
 
-const migrationDirectory = path.resolve('src/migrations');
+const migrationDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../migrations');
 const client = await pool.connect();
 
 try {

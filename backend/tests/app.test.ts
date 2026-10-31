@@ -1,54 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
-import app from '../src/app.js';
-import { crmBookingSchema, parse, plotSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.js';
+import app from '../src/app.ts';
+import { crmBookingSchema, parse, plotSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
 
-test('serves the responsive CRM sign-in application', async () => {
+test('exposes backend service information and database health', async () => {
   const response = await request(app).get('/');
   assert.equal(response.status, 200);
-  assert.match(response.text, /EstateDesk CRM/);
-  assert.match(response.text, /view-inventory/);
-  assert.match(response.text, /toggle-password/);
-  assert.match(response.text, /aria-label="Show password"/);
-  assert.match(response.text, /login-showcase/);
-});
-
-test('serves same-origin API configuration for local development', async () => {
-  const response = await request(app).get('/api-config.js');
-  assert.equal(response.status, 200);
-  assert.match(response.text, /export const API_BASE_URL = ''/);
-});
-
-test('serves project detail editing and clearly labeled sample project UI', async () => {
-  const response = await request(app).get('/app.js');
-  assert.equal(response.status, 200);
-  assert.match(response.text, /Edit project details/);
-  assert.match(response.text, /Total land area/);
-  assert.match(response.text, /Sample data only/);
-  assert.match(response.text, /hidden from public APIs/);
-  assert.match(response.text, /Unable to reach the CRM server/);
-  assert.match(response.text, /drawDemoMasterPlan/);
-  assert.match(response.text, /CENTRAL PARK/);
-  assert.match(response.text, /CLUBHOUSE/);
-  assert.match(response.text, /ENTRANCE/);
-  assert.match(response.text, /Proposed booking amount/);
-});
-
-test('serves the public live inventory and booking experience', async () => {
-  for (const route of ['/live-booking-status', '/booking']) {
-    const response = await request(app).get(route);
-    assert.equal(response.status, 200);
-    assert.match(response.text, /Explore plot availability/);
-    assert.match(response.text, /booking\.js/);
-    assert.match(response.text, /booking-form/);
-    assert.match(response.text, /does not reserve the plot/);
-    assert.doesNotMatch(response.text, /pattern="\[\+/);
-  }
-  const script = await request(app).get('/booking.js');
-  assert.equal(script.status, 200);
-  assert.match(script.text, /public\/booking-requests/);
-  assert.match(script.text, /not a confirmed booking/i);
+  assert.deepEqual(response.body, { service: 'EstateDesk API', health: '/api/v1/health' });
 });
 
 test('validates customer details, consent, and non-negative CRM booking amounts', () => {

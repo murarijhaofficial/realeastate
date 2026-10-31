@@ -1,45 +1,58 @@
 # EstateDesk CRM
 
-A mobile-responsive real estate CRM starter built with Node.js, Express, and PostgreSQL. It includes a role-aware CRM dashboard, project and plot inventory, an SVG layout editor, temporary holds, manager-approved bookings, lead management, public website APIs, and server-sent inventory updates.
+A mobile-responsive real estate CRM built as a pnpm monorepo with a separate Vite frontend, Node.js/Express backend, and PostgreSQL database. It includes a role-aware CRM dashboard, project and plot inventory, an SVG layout editor, temporary holds, manager-approved bookings, lead management, public website APIs, and server-sent inventory updates.
 
 ## Requirements
 
 - Node.js 20+
+- pnpm 10+ (the workspace pins pnpm 10.29.2; use `corepack enable` if needed)
 - Docker Desktop (or a PostgreSQL 14+ server)
+
+## Application structure
+
+- `frontend/src/pages/` contains one TSX module per CRM page: sign-in, dashboard, projects, leads, bookings, team, and settings.
+- `frontend/src/components/` contains the shared workspace shell and page-header UI.
+- `frontend/src/lib/` is the typed browser API boundary.
+- `backend/src/` uses native TypeScript modules. Node.js 22.6+ is required for built-in TypeScript stripping support.
 
 ## Run locally
 
 1. Copy `.env.example` to `.env`. Set `ADMIN_NAME`, `ADMIN_EMAIL`, an `ADMIN_PASSWORD` of 12–72 UTF-8 bytes, and a private random `JWT_SECRET` of at least 32 characters. Keep `.env` private and never paste credentials into chat.
 2. Start PostgreSQL with `docker compose up -d postgres`, or configure `DATABASE_URL` for an existing database.
-3. Install dependencies: `npm ci`
-4. Create the schema: `npm run db:migrate`
-5. Create the administrator and initial Ratanpur project: `npm run db:seed`. If the example admin password is still present, first replace it in `.env` with a private password (12–72 UTF-8 bytes); a real JWT secret of at least 32 characters is also required.
-6. (Optional) Create an isolated fictional sample project and inventory: `npm run db:seed:demo`
-7. Start the backend and its built-in frontend together: `npm run dev`
-8. Open `http://localhost:3000` and sign in using `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `.env`. The public inventory page is at `http://localhost:3000/live-booking-status`.
+3. Install workspace dependencies from the repository root: `pnpm install`
+4. Create the schema and administrator: `pnpm db:migrate`, then `pnpm db:seed`.
+5. Start both packages: `pnpm dev`.
+6. Open the frontend at `http://localhost:5173` (or `http://127.0.0.1:5173`). The Vite development server proxies API, uploads, and live-event requests to the backend at `http://localhost:3000`; check backend/database health at `http://localhost:3000/api/v1/health`.
 
-The local app is a single Express server: it serves the frontend files and `/api/v1` from port 3000. Check the backend and its PostgreSQL connection at `http://localhost:3000/api/v1/health`. Keep the `npm run dev` terminal open while using the app.
+The backend and frontend are separate packages and can also be started in separate terminals:
+
+```text
+pnpm dev:backend
+pnpm dev:frontend
+```
+
+You can run `pnpm --filter @estatedesk/backend dev` and `pnpm --filter @estatedesk/frontend dev` directly as well. The frontend package contains the CRM and public booking page; the backend package contains the Express API, migrations, seeds, and tests.
 
 ## Deploy: Render backend + Vercel frontend
 
-The backend and database run on Render; the static browser frontend is built and hosted on Vercel. The frontend calls the Render API directly over HTTPS. The Render API allows browser requests only from the exact Vercel origin configured in `PUBLIC_WEB_ORIGIN`.
+The backend and database run on Render; the frontend is built and hosted separately on Vercel. Set the Render service's **Root Directory** to the repository root so pnpm can see the workspace lockfile and both packages.
 
 ### 1. Deploy the backend and database to Render
 
-1. Push this project to a Git provider supported by Render, then create a new **Blueprint** from the repository. Render reads [`render.yaml`](./render.yaml), provisions the Node web service and PostgreSQL database, runs `npm ci`, and applies SQL migrations before each deploy.
-2. In the Render service's **Environment** settings, set `ADMIN_NAME`, `ADMIN_EMAIL`, and a unique `ADMIN_PASSWORD` (12–72 UTF-8 bytes). Render generates `JWT_SECRET`; keep it private. Do not copy values from `.env` into source files.
+1. Push this project to a Git provider supported by Render, then create a new **Blueprint** from the repository root. Render reads [`render.yaml`](./render.yaml), provisions the Node web service and PostgreSQL database, installs the pnpm workspace, and applies SQL migrations before each deploy.
+2. In the Render service's **Environment** settings, set `ADMIN_NAME`, `ADMIN_EMAIL`, and a unique `ADMIN_PASSWORD` (12–72 UTF-8 bytes). Render generates `JWT_SECRET`; keep it private. The Blueprint uses Render's private database URL and enables TLS while allowing its internal self-signed certificate (`DATABASE_SSL_REJECT_UNAUTHORIZED=false`); other production deployments keep certificate verification enabled by default. Do not copy values from `.env` into source files.
 3. Deploy and wait for `https://<your-render-service>.onrender.com/api/v1/health` to return `{"success":true,"data":{"status":"ok","database":"connected"}}`. Save the service's HTTPS origin (without a path).
-4. In the Render service Shell, run `npm run db:seed` once to create the administrator and starter project. For a separate fictional demo project, run `npm run db:seed:demo` only if desired. Migrations run automatically; do not reseed real project data.
+4. In the Render service Shell, run `pnpm --filter @estatedesk/backend db:seed` once to create the administrator and starter project. For a separate fictional demo project, run `pnpm --filter @estatedesk/backend db:seed:demo` only if desired. Migrations run automatically; do not reseed real project data.
 
 ### 2. Deploy the frontend to Vercel
 
-1. Import the same repository into Vercel, using the repository root as the project root. The included [`vercel.json`](./vercel.json) builds the static site into `dist`.
-2. Add the Vercel environment variable `API_BASE_URL` with the Render HTTPS origin, for example `https://estatedesk-api.onrender.com` (no `/api/v1` suffix and no trailing path). Set it for each Vercel environment you deploy (Production, and Preview if needed), then deploy.
+1. Import the same repository into Vercel and set **Root Directory** to `frontend`. The frontend's [`vercel.json`](./frontend/vercel.json) builds and deploys only that package.
+2. Add the Vercel environment variable `VITE_API_BASE_URL` with the Render HTTPS origin, for example `https://estatedesk-api.onrender.com` (no `/api/v1` suffix). Set it for each Vercel environment you deploy (Production, and Preview if needed), then deploy.
 3. Open the Vercel deployment and note its exact origin, such as `https://your-crm.vercel.app`.
-4. Add that exact origin to Render's `PUBLIC_WEB_ORIGIN` setting and redeploy the Render service. For a custom domain or a Vercel Preview deployment, add each exact browser origin as a comma-separated value. Do not use `*` for a production CRM.
+4. Add that exact origin to Render's `PUBLIC_WEB_ORIGIN` setting and redeploy the Render service. For a custom domain or a Vercel Preview deployment, add each exact browser origin as a comma-separated value. Do not use `*` for a production CRM. The public availability page is deployed at `/live-booking-status` (also `/booking`).
 5. Test sign-in, a public inventory request, a booking request, live inventory updates, and the health URL. The public page is available at `/live-booking-status` (and `/booking`).
 
-`API_BASE_URL` is embedded into the public frontend at build time and is not a secret. Never put database credentials, admin passwords, or `JWT_SECRET` in Vercel variables or browser code. Use Render's managed database connection string and keep `JWT_SECRET` stable across deploys so existing sessions remain valid.
+`VITE_API_BASE_URL` is embedded into the public frontend at build time and is not a secret. Never put database credentials, admin passwords, or `JWT_SECRET` in Vercel variables or browser code. Use Render's managed database connection string and keep `JWT_SECRET` stable across deploys so existing sessions remain valid.
 
 ### Deployment limitations to address before real operations
 
@@ -61,12 +74,14 @@ The standard seed creates the Ratanpur project record only. No plot numbers, bou
 ## Useful commands
 
 ```text
-npm run dev
-npm start
-npm test
-npm run db:migrate
-npm run db:seed
-npm run db:seed:demo
+pnpm dev
+pnpm dev:backend
+pnpm dev:frontend
+pnpm build
+pnpm test
+pnpm db:migrate
+pnpm db:seed
+pnpm db:seed:demo
 ```
 
 Use the **Edit project details** action on the Projects & Inventory page to update a project's metadata. Sample plots, customers, and bookings are fictional; keep them separate from real operations.
@@ -97,8 +112,6 @@ Public project and inventory APIs expose only active projects with a published l
 
 ## Production notes
 
-This is the initial MVP milestone, not a production deployment. Before launch, configure HTTPS, secure secret management, persistent/object file storage, backups, monitoring, refresh-token rotation/password recovery, durable webhook delivery, and a shared event broker for multi-instance SSE. Uploaded layout images currently use local disk storage. Public website CORS origins must be explicitly configured in `PUBLIC_WEB_ORIGIN`.
+This is the initial MVP milestone, not a production deployment. Before launch, configure HTTPS, secure secret management, persistent/object file storage, backups, monitoring, refresh-token rotation/password recovery, durable webhook delivery, and a shared event broker for multi-instance SSE. Uploaded layout images currently use `backend/uploads` on local disk. Public website CORS origins must be explicitly configured in `PUBLIC_WEB_ORIGIN`.
 
 See [`agent.md`](./agent.md) for the implementation log, decisions, and remaining requirement checklist.
-#   r e a l e a s t a t e  
- 

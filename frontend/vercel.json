@@ -1,0 +1,16 @@
+{
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/live-booking-status",
+      "destination": "/public/live-booking-status.html"
+    },
+    {
+      "source": "/booking",
+      "destination": "/public/live-booking-status.html"
+    }
+  ]
+}

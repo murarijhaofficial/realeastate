@@ -5,9 +5,9 @@ This file is the project implementation log. Update it when features, architectu
 ## Product and stack decisions
 
 - Product: responsive real estate CRM and plot inventory management system, based on `requirement.txt.txt`.
-- Backend: Node.js + Express, PostgreSQL, parameterized SQL with `pg`, and SQL-file migrations.
-- Frontend: responsive browser UI served by Express (vanilla JavaScript and SVG). This keeps the initial application self-contained; a separate React/Next.js frontend can be introduced later.
-- Architecture: modular monolith; PostgreSQL transactions and row locks are authoritative for inventory and booking state.
+- Backend: Node.js + Express, PostgreSQL, parameterized SQL with `pg`, and SQL-file migrations in `backend/`.
+- Frontend: Vite-hosted responsive browser UI (vanilla JavaScript and SVG) in `frontend/`, deployable independently from the API.
+- Architecture: pnpm workspace monorepo with separate frontend and backend packages; PostgreSQL transactions and row locks are authoritative for inventory and booking state.
 - Layout reference: Ratanpur, Survey No. 254/1. The standard seed deliberately creates no fabricated plot boundaries or sales data for Ratanpur. A separate opt-in demo seed creates a clearly labeled, inactive fictional project for UI testing.
 
 ## Progress updates
@@ -91,9 +91,17 @@ See `README.md`. Quick start:
 - Upgraded the demo's published plot coordinates to a 12-plot master plan with internal roads, entrance, clubhouse, central park, utility area, and north indicator. Existing draft layouts were preserved; a subsequent seed run made no layout changes.
 - Confirmed all 12 published plot geometries remain normalized, the project is inactive, and `npm test` still passes (7/7).
 
+### 2026-10-31 — pnpm workspace and split deployment
+
+- Migrated the repository to a pnpm 10 workspace with independent `backend/` and `frontend/` packages and a committed frozen lockfile.
+- Moved the Express API, migrations, seeds, and backend tests into `backend/`; moved the CRM and public booking site into a Vite frontend in `frontend/`.
+- Added a Vite development proxy for API, uploads, and server-sent events; local frontend and backend run separately on ports 5173 and 3000.
+- Updated Render to deploy the API from the monorepo root and Vercel to build only the `frontend/` package with a required HTTPS API origin.
+- Verified `pnpm install --frozen-lockfile`, all 10 workspace tests, the production Vite build, and frontend-to-backend health proxying.
+
 ## Next recommended work
 
 1. Sign in using `ADMIN_EMAIL` and `ADMIN_PASSWORD` from the local `.env`; do not share these values in chat.
 2. Add role-specific API tests and booking concurrency integration tests.
 3. Complete cancellation, registration, payments, lead activities/follow-ups, and plot import/export.
-4. Add durable signed webhooks, refresh-token rotation, document storage, backup/deployment instructions, and production security testing.
+4. Add durable signed webhooks, refresh-token rotation, persistent document storage, backup planning, and production security testing.

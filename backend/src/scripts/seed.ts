@@ -1,6 +1,6 @@
-import 'dotenv/config';
+import '../env.ts';
 import bcrypt from 'bcryptjs';
-import { pool } from '../db.js';
+import { pool } from '../db.ts';
 
 try {
   const name = process.env.ADMIN_NAME;

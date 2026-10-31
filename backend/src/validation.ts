@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HttpError } from './errors.js';
+import { HttpError } from './errors.ts';
 
 export function parse(schema, value) {
   const result = schema.safeParse(value);

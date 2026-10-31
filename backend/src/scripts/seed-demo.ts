@@ -1,5 +1,5 @@
-import 'dotenv/config';
-import { pool } from '../db.js';
+import '../env.ts';
+import { pool } from '../db.ts';
 
 const demoCode = 'DEMO-GREEN-MEADOWS';
 const previousLayoutName = 'DEMO schematic plot plan - Not for construction or sale';

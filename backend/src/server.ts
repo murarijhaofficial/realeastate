@@ -1,6 +1,6 @@
-import 'dotenv/config';
-import app, { expireHolds } from './app.js';
-import { pool } from './db.js';
+import './env.ts';
+import app, { expireHolds } from './app.ts';
+import { pool } from './db.ts';
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL must be configured.');
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be at least 32 characters.');

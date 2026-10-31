@@ -1,7 +1,8 @@
-import 'dotenv/config';
+import './env.ts';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -9,15 +10,16 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { pool, inTransaction } from './db.js';
-import { authenticate, permissionsFor, requireProjectAccess } from './auth.js';
-import { HttpError, asyncHandler } from './errors.js';
-import { inventoryEvents, publishInventoryEvent } from './realtime.js';
-import { crmBookingSchema, idSchema, parse, plotSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.js';
+import { pool, inTransaction } from './db.ts';
+import { authenticate, permissionsFor, requireProjectAccess } from './auth.ts';
+import { HttpError, asyncHandler } from './errors.ts';
+import { inventoryEvents, publishInventoryEvent } from './realtime.ts';
+import { crmBookingSchema, idSchema, parse, plotSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
 
 const app = express();
 const api = express.Router();
-const uploadDirectory = path.resolve('uploads');
+const backendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const uploadDirectory = path.join(backendDirectory, 'uploads');
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
 app.disable('x-powered-by');
@@ -28,9 +30,8 @@ app.use(helmet({
 const allowedOrigins = process.env.PUBLIC_WEB_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? false;
 app.use(cors({ origin: allowedOrigins }));
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.resolve('public')));
-app.get(['/live-booking-status', '/booking'], (_req, res) => {
-  res.sendFile(path.resolve('public/live-booking-status.html'));
+app.get('/', (_req, res) => {
+  res.json({ service: 'EstateDesk API', health: '/api/v1/health' });
 });
 app.get('/uploads/:filename', asyncHandler(async (req, res) => {
   const { filename } = req.params;

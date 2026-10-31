@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { HttpError, asyncHandler } from './errors.js';
-import { pool } from './db.js';
+import { HttpError, asyncHandler } from './errors.ts';
+import { pool } from './db.ts';
 
 const rolePermissions = {
   ADMIN: ['*'],

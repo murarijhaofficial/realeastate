@@ -2,7 +2,8 @@ node_modules/
 .env
 .env.*
 !.env.example
-uploads/
-coverage/
-dist/
+**/node_modules/
+backend/uploads/
+**/coverage/
+**/dist/
 npm-debug.log*
