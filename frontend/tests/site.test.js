@@ -48,3 +48,21 @@ test('project setup captures plot details and exposes project highlights publicl
   assert.match(bookingScript, /if \(plot\.status === 'AVAILABLE'\) openBookingForm\(\)/);
   assert.match(bookingScript, /plot\.client/);
 });
+
+test('project editing, WordPress map details, and agent website requests stay connected', async () => {
+  const app = await fs.readFile('src/main.tsx', 'utf8');
+  const projectsPage = await fs.readFile('src/pages/ProjectsPage.tsx', 'utf8');
+  const wordpress = await fs.readFile('../wordpress-plugin/estatedesk-live-booking/assets/live-booking.js', 'utf8');
+  const api = await fs.readFile('../backend/src/app.ts', 'utf8');
+
+  assert.match(projectsPage, /id="edit-project"/);
+  assert.match(app, /method: project \? 'PATCH' : 'POST'/);
+  assert.match(app, /<option value="INACTIVE".*Inactive/);
+  assert.match(wordpress, /state\.data\.layout\.image_url/);
+  assert.match(wordpress, /\['Client', plot\.client\]/);
+  assert.match(wordpress, /plot\.status === 'AVAILABLE'\) openDialog\(\)/);
+  assert.match(wordpress, /state\.selected\.status !== 'AVAILABLE'/);
+  assert.match(api, /b\.source = 'WEBSITE'.*user_projects/s);
+  assert.match(api, /userId \?\? plot\.assigned_sales_user_id/);
+  assert.match(api, /plot\.status !== 'AVAILABLE'/);
+});

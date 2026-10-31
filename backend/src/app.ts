@@ -648,7 +648,8 @@ api.get('/bookings', ...authRoute(async (req, res) => {
      JOIN customers c ON c.id = b.customer_id
      WHERE ($1::boolean OR p.project_id IN (SELECT project_id FROM user_projects WHERE user_id = $2))
        AND ($3::text IS NULL OR b.booking_status = $3)
-       AND ($4::boolean OR b.submitted_by = $2 OR b.salesperson_id = $2 OR b.broker_id = $2)
+       AND ($4::boolean OR b.submitted_by = $2 OR b.salesperson_id = $2 OR b.broker_id = $2
+         OR (b.source = 'WEBSITE' AND p.project_id IN (SELECT project_id FROM user_projects WHERE user_id = $2)))
      ORDER BY b.submitted_at DESC LIMIT 100`,
     [req.user.role === 'ADMIN', req.user.id, req.query.status ?? null, !['BROKER', 'SALES_EXECUTIVE'].includes(req.user.role)],
   );
@@ -699,8 +700,8 @@ async function submitBooking({ plotId, userId, customer, remarks = '', source = 
     if (!updated.rowCount) throw new HttpError(409, 'PLOT_NOT_AVAILABLE', 'This plot is no longer available.');
     const booking = await client.query(
       `INSERT INTO bookings (plot_id, customer_id, submitted_by, salesperson_id, total_price, booking_amount, booking_status, remarks, source)
-       VALUES ($1,$2,$3,$3,$4,$5,'PENDING_APPROVAL',$6,$7) RETURNING *`,
-      [plotId, customerId, userId, plot.current_price, Number(customer.booking_amount ?? 0), remarks, source],
+       VALUES ($1,$2,$3,$4,$5,$6,'PENDING_APPROVAL',$7,$8) RETURNING *`,
+      [plotId, customerId, userId, userId ?? plot.assigned_sales_user_id, plot.current_price, Number(customer.booking_amount ?? 0), remarks, source],
     );
     await client.query(
       `INSERT INTO plot_status_history (plot_id, previous_status, new_status, changed_by, reason, reference_type, reference_id)

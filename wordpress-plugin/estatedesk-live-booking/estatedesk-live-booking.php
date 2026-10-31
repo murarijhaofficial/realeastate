@@ -2,7 +2,7 @@
 /**
  * Plugin Name: EstateDesk Live Booking
  * Description: Shows live EstateDesk CRM plot availability on WordPress and sends booking requests to the CRM approval queue.
- * Version: 1.0.1
+ * Version: 1.1.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: EstateDesk
@@ -13,7 +13,7 @@
 defined('ABSPATH') || exit;
 
 final class EstateDesk_Live_Booking {
-    const VERSION = '1.0.1';
+    const VERSION = '1.1.0';
     const OPTION = 'edlb_settings';
     const CRON_HOOK = 'edlb_sync_default_project';
 
@@ -113,7 +113,7 @@ final class EstateDesk_Live_Booking {
             <header class="edlb-heading"><div><p>ESTATEDESK LIVE INVENTORY</p><h2><?php echo esc_html($attributes['title']); ?></h2><span class="edlb-updated">Connecting to CRM…</span></div><span class="edlb-live"><i></i>Live status</span></header>
             <div class="edlb-error" role="alert" hidden></div>
             <div class="edlb-summary" hidden><div><small>PROJECT</small><strong data-edlb-project></strong><span data-edlb-location></span></div><div><b data-edlb-available>0</b><small>Available</small></div><div><b data-edlb-total>0</b><small>Total plots</small></div></div>
-            <div class="edlb-grid" hidden><div class="edlb-card"><h3>Published plot map</h3><svg data-edlb-map viewBox="0 0 1000 650" role="img" aria-label="Live plot availability map"></svg><div class="edlb-legend"><span><i class="available"></i>Available</span><span><i class="hold"></i>On hold</span><span><i class="pending"></i>Pending</span><span><i class="booked"></i>Booked</span></div></div><aside class="edlb-card edlb-detail" data-edlb-detail><h3>Select a plot</h3><p>Choose a plot on the map or in the register to review its current status.</p></aside></div>
+            <div class="edlb-grid" hidden><div class="edlb-card"><h3>Published plot map</h3><div class="edlb-map-wrap"><svg data-edlb-map viewBox="0 0 1000 650" role="img" aria-label="Live plot availability map"></svg><div class="edlb-tooltip" data-edlb-tooltip role="tooltip" hidden></div></div><div class="edlb-legend"><span><i class="available"></i>Available</span><span><i class="hold"></i>On hold</span><span><i class="pending"></i>Pending</span><span><i class="booked"></i>Booked</span></div></div><aside class="edlb-card edlb-detail" data-edlb-detail><h3>Select a plot</h3><p>Choose a plot on the map or in the register to review its current status.</p></aside></div>
             <div class="edlb-card edlb-register" hidden><div><h3>Plot register</h3><input data-edlb-search type="search" placeholder="Search plot number" aria-label="Search plot number"></div><div data-edlb-plots></div></div>
             <dialog class="edlb-dialog" data-edlb-dialog><form data-edlb-booking-form method="dialog"><button class="edlb-close" type="button" data-edlb-close aria-label="Close">×</button><h3>Request this plot</h3><p data-edlb-booking-plot></p><label>Full name<input name="name" maxlength="150" required></label><label>Mobile number<input name="mobile" inputmode="tel" maxlength="20" required></label><label>Email address (optional)<input name="email" type="email" maxlength="255"></label><label>Message (optional)<textarea name="message" maxlength="1000"></textarea></label><label class="edlb-consent"><input name="consent" type="checkbox" required> I agree that the project team may contact me about this non-binding request.</label><input class="edlb-honeypot" name="website" tabindex="-1" autocomplete="off"><p data-edlb-form-error role="alert"></p><button class="edlb-action" type="submit">Send booking request</button></form></dialog>
         </section>
@@ -124,7 +124,7 @@ final class EstateDesk_Live_Booking {
     private function enqueue_assets() {
         wp_enqueue_style('edlb-live-booking', plugin_dir_url(__FILE__) . 'assets/live-booking.css', array(), self::VERSION);
         wp_enqueue_script('edlb-live-booking', plugin_dir_url(__FILE__) . 'assets/live-booking.js', array(), self::VERSION, true);
-        wp_add_inline_script('edlb-live-booking', 'window.EDLB = ' . wp_json_encode(array('restUrl' => esc_url_raw(rest_url('estatedesk-live-booking/v1/')))) . ';', 'before');
+        wp_add_inline_script('edlb-live-booking', 'window.EDLB = ' . wp_json_encode(array('restUrl' => esc_url_raw(rest_url('estatedesk-live-booking/v1/')), 'apiOrigin' => esc_url_raw($this->settings()['api_base_url']))) . ';', 'before');
     }
 
     public function get_inventory(WP_REST_Request $request) {

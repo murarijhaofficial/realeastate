@@ -12,6 +12,13 @@ import { teamPage } from './pages/TeamPage';
 import { settingsPage } from './pages/SettingsPage';
 
 const root = document.querySelector<HTMLDivElement>('#root')!;
+const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+})[character]!);
 let currentUser: User | null = null;
 let projects: Project[] = [];
 let currentPlots: Plot[] = [];
@@ -77,6 +84,11 @@ function bindPageActions() {
     try { await api(`/bookings/${button.dataset.booking}/${decision}`, { method: 'POST', body: JSON.stringify({ reason: '' }) }); showToast(`Booking ${decision}d.`); renderApp(); } catch (error) { showToast(error instanceof Error ? error.message : 'Could not update booking.', true); }
   }));
   document.querySelector('#new-project')?.addEventListener('click', showProjectForm);
+  document.querySelector('#edit-project')?.addEventListener('click', () => {
+    const projectId = projectIdFromHash();
+    const project = projects.find((item) => item.id === projectId);
+    if (project) showProjectForm(project);
+  });
   document.querySelector('#new-plot')?.addEventListener('click', showPlotForm);
   document.querySelector('#new-layout')?.addEventListener('click', () => createLayout(false));
   document.querySelector('#new-layout-revision')?.addEventListener('click', () => createLayout(true));
@@ -249,33 +261,36 @@ function openDialog(title: string, fields: string, submit: (form: FormData) => P
   });
 }
 
-function showProjectForm() {
-  if (!can('projects:write')) return showToast('You do not have permission to create projects.', true);
-  openDialog('Create project', `
+function showProjectForm(project?: Project) {
+  if (!can('projects:write')) return showToast('You do not have permission to manage projects.', true);
+  const value = (input: unknown) => escapeHtml(input ?? '');
+  const selected = (field: keyof Project, option: string, fallback = '') => (project?.[field] ?? fallback) === option ? 'selected' : '';
+  openDialog(project ? 'Edit project' : 'Create project', `
     <div class="dialog-section"><h3>Project details</h3><p>Enter verified project information. An active project appears in public booking after its layout is published.</p></div>
-    <label>Project name<input required name="project_name" maxlength="200" placeholder="e.g. Sunrise Meadows"></label>
-    <label>Project code<input required name="project_code" maxlength="50" placeholder="e.g. SM-01"></label>
-    <label>Project type<select name="project_type"><option value="RESIDENTIAL">Residential</option><option value="PLOTTING">Plotting</option><option value="COMMERCIAL">Commercial</option><option value="MIXED_USE">Mixed use</option></select></label>
-    <label>Status<select name="status"><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="ARCHIVED">Archived</option></select></label>
-    <label>Total land area<input name="total_land_area" type="number" min="0" step="0.01" placeholder="e.g. 2.50"></label>
-    <label>Land area unit<select name="area_unit"><option value="ACRE">Acres</option><option value="HECTARE">Hectares</option><option value="SQ_YARD">Square yards</option><option value="SQ_FT">Square feet</option></select></label>
+    <label>Project name<input required name="project_name" maxlength="200" placeholder="e.g. Sunrise Meadows" value="${value(project?.project_name)}"></label>
+    <label>Project code<input required name="project_code" maxlength="50" placeholder="e.g. SM-01" value="${value(project?.project_code)}"></label>
+    <label>Project type<select name="project_type"><option value="RESIDENTIAL" ${selected('project_type', 'RESIDENTIAL', 'RESIDENTIAL')}>Residential</option><option value="PLOTTING" ${selected('project_type', 'PLOTTING')}>Plotting</option><option value="COMMERCIAL" ${selected('project_type', 'COMMERCIAL')}>Commercial</option><option value="MIXED_USE" ${selected('project_type', 'MIXED_USE')}>Mixed use</option></select></label>
+    <label>Status<select name="status"><option value="ACTIVE" ${selected('status', 'ACTIVE', 'ACTIVE')}>Active</option><option value="INACTIVE" ${selected('status', 'INACTIVE')}>Inactive</option><option value="ARCHIVED" ${selected('status', 'ARCHIVED')}>Archived</option></select></label>
+    <label>Total land area<input name="total_land_area" type="number" min="0" step="0.01" placeholder="e.g. 2.50" value="${value(project?.total_land_area)}"></label>
+    <label>Land area unit<select name="area_unit"><option value="ACRE" ${selected('area_unit', 'ACRE', 'ACRE')}>Acres</option><option value="HECTARE" ${selected('area_unit', 'HECTARE')}>Hectares</option><option value="SQ_YARD" ${selected('area_unit', 'SQ_YARD')}>Square yards</option><option value="SQ_FT" ${selected('area_unit', 'SQ_FT')}>Square feet</option></select></label>
     <div class="dialog-section"><h3>Location and legal details</h3></div>
-    <label>Survey number<input name="survey_number" maxlength="100"></label>
-    <label>Village / locality<input name="village" maxlength="150"></label>
-    <label>Taluka / Tehsil<input name="taluka" maxlength="150"></label>
-    <label>District<input name="district" maxlength="150"></label>
-    <label>State<input name="state" maxlength="100"></label>
-    <label>PIN code<input name="pincode" maxlength="10" inputmode="numeric"></label>
-    <label>Latitude<input name="latitude" type="number" min="-90" max="90" step="0.0000001" placeholder="Optional"></label>
-    <label>Longitude<input name="longitude" type="number" min="-180" max="180" step="0.0000001" placeholder="Optional"></label>
-    <label class="full-width">Project description<textarea name="description" rows="3" maxlength="5000" placeholder="Project overview and verified details"></textarea></label>
-    <label class="full-width">Project highlights<textarea name="highlights" rows="4" maxlength="4000" placeholder="One highlight per line; each highlight is limited to 180 characters, up to 20 items"></textarea></label>
-    <div class="dialog-section inventory-form-heading"><div><h3>Initial plot inventory</h3><p>Optional. Add plot dimensions, facing, road width and price; add more plots later.</p></div><button type="button" id="add-initial-plot" class="secondary-button">+ Add plot</button></div>
-    <div id="initial-plots" class="initial-plots full-width"></div>
+    <label>Survey number<input name="survey_number" maxlength="100" value="${value(project?.survey_number)}"></label>
+    <label>Village / locality<input name="village" maxlength="150" value="${value(project?.village)}"></label>
+    <label>Taluka / Tehsil<input name="taluka" maxlength="150" value="${value(project?.taluka)}"></label>
+    <label>District<input name="district" maxlength="150" value="${value(project?.district)}"></label>
+    <label>State<input name="state" maxlength="100" value="${value(project?.state)}"></label>
+    <label>PIN code<input name="pincode" maxlength="10" inputmode="numeric" value="${value(project?.pincode)}"></label>
+    <label>Latitude<input name="latitude" type="number" min="-90" max="90" step="0.0000001" placeholder="Optional" value="${value(project?.latitude)}"></label>
+    <label>Longitude<input name="longitude" type="number" min="-180" max="180" step="0.0000001" placeholder="Optional" value="${value(project?.longitude)}"></label>
+    <label class="full-width">Project description<textarea name="description" rows="3" maxlength="5000" placeholder="Project overview and verified details">${value(project?.description)}</textarea></label>
+    <label class="full-width">Project highlights<textarea name="highlights" rows="4" maxlength="4000" placeholder="One highlight per line; each highlight is limited to 180 characters, up to 20 items">${value(project?.highlights?.join('\n'))}</textarea></label>
+    ${project ? '' : `<div class="dialog-section inventory-form-heading"><div><h3>Initial plot inventory</h3><p>Optional. Add plot dimensions, facing, road width and price; add more plots later.</p></div><button type="button" id="add-initial-plot" class="secondary-button">+ Add plot</button></div><div id="initial-plots" class="initial-plots full-width"></div>`}
   `, async (form) => {
     const data: Record<string, unknown> = Object.fromEntries(form);
-    for (const key of ['project_code', 'project_name', 'project_type', 'status', 'area_unit', 'survey_number', 'village', 'taluka', 'district', 'state', 'pincode', 'description']) {
-      if (data[key] === '') delete data[key];
+    if (!project) {
+      for (const key of ['project_code', 'project_name', 'project_type', 'status', 'area_unit', 'survey_number', 'village', 'taluka', 'district', 'state', 'pincode', 'description']) {
+        if (data[key] === '') delete data[key];
+      }
     }
     for (const key of ['total_land_area', 'latitude', 'longitude']) {
       if (data[key] === '') delete data[key];
@@ -291,10 +306,14 @@ function showProjectForm() {
       return plot;
     });
     data.highlights = String(form.get('highlights') ?? '').split(/\r?\n/).map((highlight) => highlight.trim()).filter(Boolean);
-    data.initial_plots = initialPlots;
-    await api('/projects', { method: 'POST', body: JSON.stringify(data) });
-  }, 'project-dialog', 'Create project', 'Project created.');
+    if (!project) data.initial_plots = initialPlots;
+    await api(project ? `/projects/${project.id}` : '/projects', {
+      method: project ? 'PATCH' : 'POST',
+      body: JSON.stringify(data),
+    });
+  }, 'project-dialog', project ? 'Update project' : 'Create project', project ? 'Project updated.' : 'Project created.');
 
+  if (project) return;
   const plotContainer = document.querySelector<HTMLDivElement>('#initial-plots')!;
   const addPlotButton = document.querySelector<HTMLButtonElement>('#add-initial-plot')!;
   addPlotButton.addEventListener('click', () => {

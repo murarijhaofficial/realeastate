@@ -88,6 +88,8 @@ Use **Projects & inventory** to create a project and add plots with their areas,
 
 The public inventory and booking page is available at `/live-booking-status` (also `/booking`). It lists only active projects with published layouts. Visitors can review project location, land area, survey details, highlights, and plot inventory; select a plot on its published map or list; and submit a non-binding request for an available plot. Requests enter the manager approval queue and are not online payments or confirmed bookings. Publish verified project inventory before sharing this URL with customers.
 
+Administrators and project managers can edit project details and change its status on the **Projects & inventory** page. The WordPress integration is in [`wordpress-plugin/estatedesk-live-booking`](./wordpress-plugin/estatedesk-live-booking); it shows the published map, masked client names, hover details, and the same available-only request form. Accepted requests immediately mark the plot pending and appear in CRM bookings for staff assigned to that project.
+
 ## API
 
 The versioned API is served at `/api/v1`. Authenticated CRM requests use `Authorization: Bearer <token>`.

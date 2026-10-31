@@ -11,7 +11,7 @@ Do not activate the old browser URL that contains a temporary name such as `esta
 1. In **WordPress → Plugins**, remove any failed/deactivated EstateDesk Live Booking entry.
 2. In **Hostinger hPanel → Files → File Manager**, open `public_html/wp-content/plugins/`.
 3. Delete only the failed temporary EstateDesk folder, if present. Do not delete unrelated plugins.
-4. Upload `estatedesk-live-booking-1.0.1.zip` to the `plugins` folder and extract it there.
+4. Upload the current `estatedesk-live-booking-1.1.0.zip` to the `plugins` folder and extract it there.
 5. Confirm the exact file path above. There must be one `estatedesk-live-booking` folder, not a duplicated nested folder.
 6. Return to **WordPress → Plugins**, refresh the page, and activate **EstateDesk Live Booking** from its row.
 
