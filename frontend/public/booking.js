@@ -125,6 +125,25 @@ function renderProject() {
   $('#project-name').textContent = project.project_name;
   $('#project-code').textContent = project.project_code;
   $('#project-location').textContent = [project.village, project.taluka, project.district, project.state].filter(Boolean).join(', ') || 'Location details available from our project team';
+  $('#project-type').textContent = project.project_type || '—';
+  $('#project-land-area').textContent = project.total_land_area
+    ? `${formatArea(project.total_land_area, project.area_unit || 'ACRE')}`
+    : '—';
+  $('#project-survey').textContent = project.survey_number || '—';
+  $('#project-pincode').textContent = project.pincode || '—';
+  $('#project-overview').classList.toggle('hidden', !project.description && !project.highlights?.length
+    && !project.project_type && !project.total_land_area && !project.survey_number && !project.pincode);
+  const description = $('#project-description');
+  description.textContent = project.description || '';
+  description.classList.toggle('hidden', !project.description);
+  const highlights = Array.isArray(project.highlights) ? project.highlights : [];
+  const highlightsSection = $('#project-highlights');
+  $('#project-highlights-list').replaceChildren(...highlights.map((highlight) => {
+    const item = document.createElement('li');
+    item.textContent = highlight;
+    return item;
+  }));
+  highlightsSection.classList.toggle('hidden', highlights.length === 0);
   $('#available-count').textContent = inventory.available;
   $('#total-count').textContent = inventory.total_plots;
   $('#plan-version').textContent = `Version ${layout.version_number}`;
@@ -244,6 +263,9 @@ function renderSelectedPlot() {
   $('#detail-type').textContent = plot.plot_type || 'Residential';
   $('#detail-area').textContent = formatArea(plot.area_sq_yard);
   $('#detail-area-feet').textContent = formatArea(plot.area_sq_feet, 'sq ft');
+  $('#detail-dimensions').textContent = plot.length && plot.width
+    ? `${formatArea(plot.length, 'ft')} × ${formatArea(plot.width, 'ft')}`
+    : '—';
   $('#detail-road').textContent = formatArea(plot.road_width, 'ft');
   $('#detail-direction').textContent = plot.direction || 'Not specified';
   button.disabled = !canRequest;

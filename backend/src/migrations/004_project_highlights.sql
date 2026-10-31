@@ -1,0 +1,2 @@
+ALTER TABLE projects
+  ADD COLUMN IF NOT EXISTS highlights TEXT[] NOT NULL DEFAULT '{}';

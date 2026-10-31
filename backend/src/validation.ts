@@ -25,6 +25,7 @@ export const projectSchema = z.object({
   latitude: z.coerce.number().min(-90).max(90).optional(),
   longitude: z.coerce.number().min(-180).max(180).optional(),
   description: z.string().max(5000).optional(),
+  highlights: z.array(z.string().trim().min(1).max(180)).max(20).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
 });
 export const plotSchema = z.object({
@@ -37,6 +38,9 @@ export const plotSchema = z.object({
   direction: z.string().trim().max(20).optional(),
   road_width: z.coerce.number().nonnegative().optional(),
   current_price: z.coerce.number().nonnegative().optional(),
+});
+export const projectCreateSchema = projectSchema.extend({
+  initial_plots: z.array(plotSchema).max(500).optional(),
 });
 export const userSchema = z.object({
   full_name: z.string().trim().min(1).max(150),

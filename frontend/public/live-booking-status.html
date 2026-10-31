@@ -7,6 +7,7 @@
     <meta name="description" content="View current plot availability and submit a booking request for published EstateDesk projects.">
     <title>Live Plot Availability & Booking | EstateDesk</title>
     <link rel="stylesheet" href="/booking.css">
+    <link rel="stylesheet" href="/booking-project.css">
     <script>globalThis.ESTATEDESK_API_BASE_URL = __ESTATEDESK_API_BASE_URL__;</script>
     <script type="module" src="/booking.js"></script>
   </head>
@@ -69,6 +70,19 @@
               <span id="project-code" class="project-code"></span>
             </div>
           </div>
+          <section id="project-overview" class="project-overview hidden" aria-label="Project details">
+            <div class="project-facts">
+              <div><span>Project type</span><strong id="project-type"></strong></div>
+              <div><span>Land area</span><strong id="project-land-area"></strong></div>
+              <div><span>Survey number</span><strong id="project-survey"></strong></div>
+              <div><span>PIN code</span><strong id="project-pincode"></strong></div>
+            </div>
+            <p id="project-description" class="project-description hidden"></p>
+            <div id="project-highlights" class="project-highlights hidden">
+              <h3>Project highlights</h3>
+              <ul id="project-highlights-list"></ul>
+            </div>
+          </section>
 
           <div class="inventory-grid">
             <section class="plan-card" aria-labelledby="plan-heading">
@@ -87,6 +101,7 @@
                   <div><span>Plot type</span><strong id="detail-type"></strong></div>
                   <div><span>Plot area</span><strong id="detail-area"></strong></div>
                   <div><span>Area (sq. ft.)</span><strong id="detail-area-feet"></strong></div>
+                  <div><span>Dimensions (ft)</span><strong id="detail-dimensions"></strong></div>
                   <div><span>Road width</span><strong id="detail-road"></strong></div>
                   <div><span>Facing</span><strong id="detail-direction"></strong></div>
                 </div>

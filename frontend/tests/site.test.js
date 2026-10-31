@@ -29,3 +29,16 @@ test('frontend API configuration supports a separately hosted backend', async ()
   assert.match(viteConfig, /\/uploads/);
   assert.match(viteConfig, /live-booking-status/);
 });
+
+test('project setup captures plot details and exposes project highlights publicly', async () => {
+  const app = await fs.readFile('src/main.tsx', 'utf8');
+  const bookingPage = await fs.readFile('public/live-booking-status.html', 'utf8');
+  const bookingScript = await fs.readFile('public/booking.js', 'utf8');
+
+  assert.match(app, /Initial plot inventory/);
+  assert.match(app, /data-plot-field="current_price"/);
+  assert.match(app, /name="survey_number"/);
+  assert.match(app, /name="highlights"/);
+  assert.match(bookingPage, /project-highlights-list/);
+  assert.match(bookingScript, /project\.highlights/);
+});

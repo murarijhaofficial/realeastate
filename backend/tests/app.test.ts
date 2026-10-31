@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import app from '../src/app.ts';
-import { crmBookingSchema, parse, plotSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
+import { crmBookingSchema, parse, plotSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
 
 test('exposes backend service information and database health', async () => {
   const response = await request(app).get('/');
@@ -74,6 +74,34 @@ test('validates project metadata and geographic coordinate bounds', () => {
     project_code: 'RT-02',
     project_name: 'Sample project',
     latitude: 100,
+  }));
+});
+
+test('validates project highlights and initial plot inventory', () => {
+  const project = parse(projectCreateSchema, {
+    project_code: 'RT-03',
+    project_name: 'Sample project',
+    highlights: ['Clear title', 'Road access'],
+    initial_plots: [{
+      plot_number: 'A-01',
+      area_sq_yard: '400',
+      area_sq_feet: '3600',
+      road_width: '9',
+      current_price: '2500000',
+    }],
+  });
+  assert.deepEqual(project.highlights, ['Clear title', 'Road access']);
+  assert.equal(project.initial_plots[0].area_sq_yard, 400);
+  assert.equal(project.initial_plots[0].current_price, 2500000);
+  assert.throws(() => parse(projectCreateSchema, {
+    project_code: 'RT-04',
+    project_name: 'Sample project',
+    highlights: [''],
+  }));
+  assert.throws(() => parse(projectCreateSchema, {
+    project_code: 'RT-05',
+    project_name: 'Sample project',
+    initial_plots: Array.from({ length: 501 }, (_, index) => ({ plot_number: String(index + 1) })),
   }));
 });
 

@@ -66,7 +66,7 @@ The standard seed creates the Ratanpur project record only. No plot numbers, bou
 
 - Short-lived JWT sign-in with bcrypt password hashes, revocable sessions, role permissions, project assignment checks, rate-limited public endpoints, security headers, and structured API errors.
 - PostgreSQL migrations with UUID keys, fixed-precision financial values, status history, audit records, and a partial unique index preventing concurrent active bookings for a plot.
-- Project and plot administration, layout image upload (JPEG/PNG/WebP; 10 MB limit), normalized SVG plot boundaries, draft/publish versions, and live status colors.
+- Project and plot administration, including location/legal metadata, public project highlights, and optional initial plot records with dimensions, facing, road width, and price. Layout image upload (JPEG/PNG/WebP; 10 MB limit), normalized SVG plot boundaries, draft/publish versions, and live status colors.
 - Editable project metadata including type, land area, survey/location details, postal code, coordinates, description, and status.
 - Transactional plot holds and booking requests; only managers can approve/reject, and a submitter cannot approve their own booking.
 - Lead and customer capture, public website enquiry and booking-request APIs, and project-scoped inventory SSE events.
@@ -86,7 +86,7 @@ pnpm db:seed:demo
 
 Use the **Edit project details** action on the Projects & Inventory page to update a project's metadata. Sample plots, customers, and bookings are fictional; keep them separate from real operations.
 
-The public inventory and booking page is available at `/live-booking-status` (also `/booking`). It lists only active projects with published layouts. Visitors can select a plot on its published map or list, review plot information, and submit a non-binding request for an available plot; requests enter the manager approval queue and are not online payments or confirmed bookings. Publish verified project inventory before sharing this URL with customers.
+The public inventory and booking page is available at `/live-booking-status` (also `/booking`). It lists only active projects with published layouts. Visitors can review project location, land area, survey details, highlights, and plot inventory; select a plot on its published map or list; and submit a non-binding request for an available plot. Requests enter the manager approval queue and are not online payments or confirmed bookings. Publish verified project inventory before sharing this URL with customers.
 
 ## API
 

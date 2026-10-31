@@ -1,0 +1,31 @@
+.dialog.project-dialog { width: min(100%, 900px); }
+.dialog.project-dialog textarea { width: 100%; margin-top: 6px; border: 1px solid #ccd9df; border-radius: 6px; padding: 9px 10px; color: var(--ink); background: #fff; outline: none; font: inherit; font-size: 12px; resize: vertical; }
+.dialog.project-dialog textarea:focus { border-color: #36a47f; box-shadow: 0 0 0 3px #dff3eb; }
+.dialog-section { grid-column: 1 / -1; }
+.dialog-section h3 { margin: 3px 0; font-size: 13px; }
+.dialog-section p { margin: 4px 0 0; color: var(--muted); font-size: 11px; font-weight: 450; }
+.inventory-form-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.initial-plots { display: grid; gap: 10px; }
+.initial-plot-row { position: relative; display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; min-width: 0; margin: 0; padding: 16px 12px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.initial-plot-row legend { padding: 0 5px; color: #38745f; font-size: 10px; font-weight: 800; }
+.initial-plot-row label { min-width: 0; }
+.initial-plot-row input { min-width: 0; }
+.remove-initial-plot { grid-column: 4; justify-self: end; min-height: 24px; border: 0; background: transparent; color: #ad4646; font-size: 11px; }
+.project-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; padding: 14px; border: 1px solid #e8eeee; border-radius: 8px; background: #f8faf9; }
+.project-details>div { display: grid; gap: 4px; min-width: 0; }
+.project-details span { color: var(--muted); font-size: 10px; }
+.project-details strong { overflow-wrap: anywhere; font-size: 11px; }
+.project-details>p,.project-highlights { grid-column: 1 / -1; margin: 0; color: #465c6d; font-size: 12px; line-height: 1.6; }
+.project-highlights ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 20px; margin: 7px 0 0; padding-left: 18px; }
+@media (max-width: 720px) {
+  .dialog.project-dialog { width: min(100%, 540px); }
+  .initial-plot-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .remove-initial-plot { grid-column: 2; }
+  .project-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .dialog.project-dialog { grid-template-columns: 1fr; }
+  .dialog.project-dialog>label,.dialog.project-dialog .full-width,.dialog.project-dialog .dialog-section { grid-column: 1; }
+  .initial-plot-row { grid-column: 1; }
+  .inventory-form-heading { align-items: flex-start; flex-direction: column; }
+}

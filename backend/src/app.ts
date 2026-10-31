@@ -14,7 +14,7 @@ import { pool, inTransaction } from './db.ts';
 import { authenticate, permissionsFor, requireProjectAccess } from './auth.ts';
 import { HttpError, asyncHandler } from './errors.ts';
 import { inventoryEvents, publishInventoryEvent } from './realtime.ts';
-import { crmBookingSchema, idSchema, parse, plotSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
+import { crmBookingSchema, idSchema, parse, plotSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
 
 const app = express();
 const api = express.Router();
@@ -305,24 +305,62 @@ api.get('/projects', ...authRoute(async (req, res) => {
 
 api.post('/projects', ...authRoute(async (req, res) => {
   if (!permissionsFor(req.user.role).includes('*')) throw new HttpError(403, 'FORBIDDEN', 'Only an administrator can create projects.');
-  const data = parse(projectSchema, req.body);
+  const { initial_plots: initialPlots = [], ...data } = parse(projectCreateSchema, req.body);
   if (data.project_code.startsWith('DEMO-') && data.status !== 'INACTIVE') {
     throw new HttpError(400, 'DEMO_PROJECT_INACTIVE', 'Projects using the DEMO- code prefix must remain inactive.');
   }
-  const result = await pool.query(
-    `INSERT INTO projects
-      (project_code, project_name, survey_number, village, district, state, description, project_type,
-       total_land_area, area_unit, taluka, pincode, latitude, longitude, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-    [
-      data.project_code, data.project_name, data.survey_number ?? null, data.village ?? null,
-      data.district ?? null, data.state ?? null, data.description ?? null, data.project_type ?? 'RESIDENTIAL',
-      data.total_land_area ?? null, data.area_unit ?? 'ACRE', data.taluka ?? null, data.pincode ?? null,
-      data.latitude ?? null, data.longitude ?? null, data.status ?? 'ACTIVE',
-    ],
-  );
-  await pool.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'PROJECT_CREATED', 'projects', 'project', result.rows[0].id]);
-  res.status(201).json({ success: true, data: result.rows[0] });
+  if ((data.latitude === undefined) !== (data.longitude === undefined)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'Latitude and longitude must be provided together.');
+  }
+  const project = await inTransaction(async (client) => {
+    const result = await client.query(
+      `INSERT INTO projects
+        (project_code, project_name, survey_number, village, district, state, description, project_type,
+         total_land_area, area_unit, taluka, pincode, latitude, longitude, status, highlights)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      [
+        data.project_code, data.project_name, data.survey_number ?? null, data.village ?? null,
+        data.district ?? null, data.state ?? null, data.description ?? null, data.project_type ?? 'RESIDENTIAL',
+        data.total_land_area ?? null, data.area_unit ?? 'ACRE', data.taluka ?? null, data.pincode ?? null,
+        data.latitude ?? null, data.longitude ?? null, data.status ?? 'ACTIVE', data.highlights ?? [],
+      ],
+    );
+    const createdProject = result.rows[0];
+    if (initialPlots.length) {
+      const plots = await client.query(
+        `INSERT INTO plots
+          (project_id, plot_number, plot_type, area_sq_yard, area_sq_feet, length, width, direction, road_width, current_price)
+         SELECT $1, input.plot_number, COALESCE(input.plot_type, 'RESIDENTIAL'),
+           COALESCE(input.area_sq_yard, 0), COALESCE(input.area_sq_feet, 0), input.length, input.width,
+           input.direction, input.road_width, COALESCE(input.current_price, 0)
+         FROM jsonb_to_recordset($2::jsonb) AS input(
+           plot_number text, plot_type text, area_sq_yard numeric, area_sq_feet numeric,
+           length numeric, width numeric, direction text, road_width numeric, current_price numeric
+         )
+         RETURNING id`,
+        [createdProject.id, JSON.stringify(initialPlots)],
+      );
+      const plotIds = plots.rows.map((plot) => plot.id);
+      await client.query(
+        `INSERT INTO plot_status_history (plot_id, new_status, changed_by, reason)
+         SELECT plot_id, 'AVAILABLE', $2, 'Plot created with project'
+         FROM unnest($1::uuid[]) AS created(plot_id)`,
+        [plotIds, req.user.id],
+      );
+      await client.query(
+        `INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id)
+         SELECT $1, 'PLOT_CREATED', 'inventory', 'plot', plot_id
+         FROM unnest($2::uuid[]) AS created(plot_id)`,
+        [req.user.id, plotIds],
+      );
+    }
+    await client.query(
+      'INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)',
+      [req.user.id, 'PROJECT_CREATED', 'projects', 'project', createdProject.id],
+    );
+    return createdProject;
+  });
+  res.status(201).json({ success: true, data: project });
 }));
 
 api.patch('/projects/:projectId', ...authRoute(async (req, res) => {
@@ -790,7 +828,8 @@ api.get('/public/projects', asyncHandler(async (_req, res) => {
 api.get('/public/projects/:projectId', asyncHandler(async (req, res) => {
   const projectId = parse(idSchema, req.params.projectId);
   const result = await pool.query(
-    `SELECT p.id, p.project_code, p.project_name, p.survey_number, p.village, p.district, p.state, p.description,
+    `SELECT p.id, p.project_code, p.project_name, p.project_type, p.total_land_area, p.area_unit,
+      p.survey_number, p.village, p.taluka, p.district, p.state, p.pincode, p.description, p.highlights,
       COUNT(pl.id)::int AS total_plots,
       COUNT(pl.id) FILTER (WHERE pl.status = 'AVAILABLE')::int AS available_plots,
       COUNT(pl.id) FILTER (WHERE pl.status = 'HOLD')::int AS hold_plots,
@@ -839,7 +878,7 @@ api.get('/public/projects/:projectId/plots', asyncHandler(async (req, res) => {
       COUNT(pl.id) FILTER (WHERE pl.status = 'BLOCKED')::int AS blocked,
       COALESCE(json_agg(json_build_object(
         'id', pl.id, 'plot_number', pl.plot_number, 'area_sq_yard', pl.area_sq_yard,
-        'area_sq_feet', pl.area_sq_feet, 'road_width', pl.road_width,
+        'area_sq_feet', pl.area_sq_feet, 'length', pl.length, 'width', pl.width, 'road_width', pl.road_width,
         'plot_type', pl.plot_type, 'direction', pl.direction,
         'price', pl.current_price, 'status', pl.status
       ) ORDER BY pl.plot_number) FILTER (WHERE pl.id IS NOT NULL), '[]'::json) AS plots
