@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f2f4f1">
+    <title>EstateDesk CRM</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <section id="login-screen" class="login-shell">
+      <div class="login-layout">
+        <aside class="login-showcase" aria-label="EstateDesk property management">
+          <a class="login-brand" href="/" aria-label="EstateDesk">
+            <span class="login-brand-mark">E</span>
+            <span class="login-brand-name">estate<span>desk</span></span>
+          </a>
+          <div class="showcase-copy">
+            <span class="showcase-kicker"><i></i> YOUR BUSINESS, IN SYNC</span>
+            <h2>Every plot.<br>Every relationship.<br><span>One clear view.</span></h2>
+            <p>Bring your projects, inventory, and sales team together in one thoughtfully connected workspace.</p>
+          </div>
+          <div class="showcase-art" aria-hidden="true">
+            <div class="art-glow"></div>
+            <svg class="property-illustration" viewBox="0 0 620 390" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M37 316.5 315 42l267 274.5H37Z" fill="#F5F1E8" fill-opacity=".08" stroke="#E9E9DA" stroke-opacity=".22"/>
+              <path d="m88 307 226-226 215 226H88Z" fill="#F5F1E8" fill-opacity=".07" stroke="#E9E9DA" stroke-opacity=".32"/>
+              <path d="m139 305 174-174 165 174H139Z" fill="#F5F1E8" fill-opacity=".07" stroke="#E9E9DA" stroke-opacity=".42"/>
+              <path d="m191 306 122-122 115 122H191Z" fill="#A4C8A6" fill-opacity=".32" stroke="#D8E9D1" stroke-opacity=".7"/>
+              <path d="m244 304 69-69 64 69h-133Z" fill="#D9E7D1" fill-opacity=".76" stroke="#F0F0DE"/>
+              <path d="M312 42v264M88 307h441M139 305l173 1m-122 0 122-122m0 122 115-1m-64 0L313 131m-174 174 174 1m-86 0 86-86m0 86 82-1" stroke="#E9E9DA" stroke-opacity=".3"/>
+              <path d="M290 89h43m-64 43h83m-104 43h124m-145 43h165m-186 43h206" stroke="#E9E9DA" stroke-opacity=".24"/>
+              <path d="m294 302 18-20 19 20" stroke="#476F59" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="314" cy="301" r="36" fill="#D9E7D1" fill-opacity=".18"/>
+              <circle cx="314" cy="301" r="22" fill="#D9E7D1" fill-opacity=".3"/>
+              <circle cx="314" cy="301" r="7" fill="#E8F0D8"/>
+              <path d="m483 93 23 23m-23 0 23-23" stroke="#E5ECD8" stroke-opacity=".5" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="125" cy="134" r="3" fill="#E5ECD8" fill-opacity=".8"/>
+              <circle cx="468" cy="185" r="3" fill="#E5ECD8" fill-opacity=".8"/>
+            </svg>
+            <div class="map-float-card"><span class="map-float-icon">⌂</span><span><strong>Ratanpur</strong><small>Inventory overview</small></span><i class="map-float-status"></i></div>
+            <div class="map-float-label"><i></i> Live inventory</div>
+          </div>
+          <div class="showcase-footer"><span>BUILT FOR BETTER PROPERTY MANAGEMENT</span><span>01 <i></i> 03</span></div>
+        </aside>
+
+        <div class="login-main">
+          <div class="login-mobile-brand">
+            <span class="login-brand-mark">E</span>
+            <span class="login-brand-name">estate<span>desk</span></span>
+          </div>
+          <form id="login-form" class="login-card" novalidate>
+            <span class="login-lock-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10m-9.5 0h10a2 2 0 0 1 2 2v7h-14v-7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="14.8" r="1" fill="currentColor"/><path d="M12 15.8v1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <p class="login-eyebrow">WELCOME BACK</p>
+            <h1>Sign in to your account</h1>
+            <p class="login-description">Enter your details to access your workspace.</p>
+
+            <div class="login-field">
+              <label for="login-email">Work email</label>
+              <div class="login-input-wrap">
+                <svg class="field-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="m5 7 7 5.5L19 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <input id="login-email" name="email" type="email" autocomplete="username" required placeholder="name@company.com">
+              </div>
+            </div>
+
+            <div class="login-field">
+              <div class="login-label-row">
+                <label for="login-password">Password</label>
+              </div>
+              <div class="login-input-wrap">
+                <svg class="field-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="15.5" r="1.2" fill="currentColor"/></svg>
+                <input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password">
+                <button id="toggle-password" class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">
+                  <svg class="eye-open" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.7" stroke="currentColor" stroke-width="1.6"/></svg>
+                  <svg class="eye-closed hidden" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 3 18 18M10.6 6.2A9.8 9.8 0 0 1 12 6c6.1 0 9.5 6 9.5 6a17 17 0 0 1-3.1 3.8M6.2 6.9C3.8 8.3 2.5 12 2.5 12s3.4 6 9.5 6c1.2 0 2.3-.2 3.3-.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <p id="login-error" class="form-error login-error" role="alert" aria-live="polite"></p>
+            <button id="login-submit" class="button button-primary button-wide login-submit" type="submit">
+              <span class="login-submit-label">Sign in</span>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="login-help"><span class="login-help-icon">i</span><span>Need an account? Contact your system administrator.<br><a href="/live-booking-status">Explore live plot availability →</a></span></div>
+          </form>
+          <footer class="login-footer"><span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> SECURE, PRIVATE WORKSPACE</span><span>© 2026 EstateDesk</span></footer>
+        </div>
+      </div>
+    </section>
+
+    <div id="app-shell" class="app-shell hidden">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="EstateDesk home">
+          <span class="brand-mark">E</span><span>estate<span class="brand-light">desk</span><small>PROPERTY CRM</small></span>
+        </a>
+        <div class="nav-caption">WORKSPACE</div>
+        <nav class="navigation" aria-label="Main navigation">
+          <button class="nav-item active" data-view="overview"><span>◫</span> Overview</button>
+          <button class="nav-item" data-view="inventory"><span>⌗</span> Projects &amp; inventory</button>
+          <button class="nav-item" data-view="leads"><span>♧</span> Leads &amp; customers</button>
+          <button class="nav-item" data-view="bookings"><span>▣</span> Booking approvals <b id="pending-badge" class="nav-badge hidden">0</b></button>
+          <button class="nav-item hidden" data-view="users"><span>♙</span> Team access</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="secure-note"><span class="secure-dot"></span><span>Inventory synced<br><small>Central CRM database</small></span></div>
+          <button id="logout-button" class="logout-button">↪ <span>Sign out</span></button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="mobile-brand"><span class="brand-mark">E</span> EstateDesk</div>
+          <div id="breadcrumbs" class="breadcrumbs">Workspace <span>/</span> Overview</div>
+          <div class="topbar-right">
+            <span class="live-indicator"><i></i> Live inventory</span>
+            <button id="user-menu" class="user-menu" aria-label="Current user"><span id="avatar" class="avatar">A</span><span><strong id="user-name">Admin</strong><small id="user-role">Administrator</small></span></button>
+          </div>
+        </header>
+        <div id="notice" class="notice hidden" role="status"></div>
+        <section id="view-overview" class="page-view"></section>
+        <section id="view-inventory" class="page-view hidden"></section>
+        <section id="view-leads" class="page-view hidden"></section>
+        <section id="view-bookings" class="page-view hidden"></section>
+        <section id="view-users" class="page-view hidden"></section>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

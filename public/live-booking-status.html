@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f7f3">
+    <meta name="description" content="View current plot availability and submit a booking request for published EstateDesk projects.">
+    <title>Live Plot Availability & Booking | EstateDesk</title>
+    <link rel="stylesheet" href="/booking.css">
+    <script type="module" src="/booking.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/live-booking-status" aria-label="EstateDesk home">
+        <span class="brand-mark">E</span><span>estate<span class="brand-light">desk</span><small>PROJECT INVENTORY</small></span>
+      </a>
+      <nav class="site-nav" aria-label="Page navigation">
+        <a href="#availability">Availability</a>
+        <a href="#how-it-works">How it works</a>
+        <a class="staff-link" href="/">Staff sign in <span aria-hidden="true">↗</span></a>
+      </nav>
+      <button id="mobile-menu" class="mobile-menu" type="button" aria-label="Open navigation" aria-expanded="false"><span></span><span></span></button>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="live-dot"></span> PROJECT AVAILABILITY</p>
+          <h1>Find a place<br>to <span>call your own.</span></h1>
+          <p class="hero-description">Explore the latest published plot availability, review the details, and send a request to our team. Availability is refreshed as bookings are reviewed.</p>
+          <a class="hero-link" href="#availability">Explore available plots <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <div class="art-sun"></div><div class="art-road"></div>
+          <div class="art-block block-one"><i></i><i></i><i></i></div>
+          <div class="art-block block-two"><i></i><i></i><i></i></div>
+          <div class="art-block block-three"><i></i><i></i></div>
+          <div class="art-park"><span>GREEN<br>SPACE</span></div>
+          <div class="art-pin"><span>⌂</span></div>
+          <div class="art-caption"><span class="caption-dot"></span> Thoughtfully planned communities</div>
+        </div>
+      </section>
+
+      <section id="availability" class="availability-section">
+        <div class="section-heading">
+          <div><p class="eyebrow">LIVE INVENTORY</p><h2>Explore plot availability</h2><p>Select a project to see its published layout and current plot status.</p></div>
+          <div class="live-status"><span class="live-dot"></span><span id="connection-label">Connecting to live inventory</span></div>
+        </div>
+
+        <div id="page-error" class="page-alert hidden" role="alert"></div>
+        <div id="project-picker" class="project-picker hidden">
+          <label for="project-select">Choose a project</label>
+          <select id="project-select" class="field-select"></select>
+        </div>
+        <div id="empty-projects" class="empty-projects hidden">
+          <div class="empty-icon">⌂</div>
+          <h3>No projects available just yet</h3>
+          <p>There are no active projects with a published layout at the moment. Please check back soon or contact our team.</p>
+          <a href="/">Team sign in <span aria-hidden="true">→</span></a>
+        </div>
+
+        <div id="inventory-content" class="hidden">
+          <div class="project-summary">
+            <div class="project-title"><span class="project-kicker">CURRENT PROJECT</span><h3 id="project-name"></h3><p id="project-location"></p></div>
+            <div class="project-numbers">
+              <div><strong id="available-count">0</strong><span>Available</span></div>
+              <div><strong id="total-count">0</strong><span>Total plots</span></div>
+              <span id="project-code" class="project-code"></span>
+            </div>
+          </div>
+
+          <div class="inventory-grid">
+            <section class="plan-card" aria-labelledby="plan-heading">
+              <div class="card-heading"><div><p class="eyebrow">PUBLISHED SITE PLAN</p><h3 id="plan-heading">Plot map</h3></div><span id="plan-version" class="version-label"></span></div>
+              <div class="public-map-wrap"><svg id="public-map" viewBox="0 0 1000 650" role="img" aria-label="Published project plot availability map"></svg><div id="map-empty" class="map-empty hidden">A published layout is available, but plot boundaries have not been added yet. See the plot list below for current availability.</div></div>
+              <div class="map-legend"><span><i class="legend-available"></i>Available</span><span><i class="legend-hold"></i>On hold</span><span><i class="legend-pending"></i>Request pending</span><span><i class="legend-unavailable"></i>Booked / unavailable</span></div>
+            </section>
+
+            <aside class="plot-card" aria-live="polite">
+              <div class="card-heading"><div><p class="eyebrow">PLOT DETAILS</p><h3 id="plot-heading">Choose a plot</h3></div><span id="plot-status" class="status-badge status-none">Not selected</span></div>
+              <div id="plot-placeholder" class="plot-placeholder"><span>01</span><p>Select any plot on the map or from the availability list to review its details.</p></div>
+              <div id="plot-information" class="plot-information hidden">
+                <div class="price-label">Indicative plot price</div><div id="plot-price" class="plot-price"></div>
+                <div class="detail-list">
+                  <div><span>Plot number</span><strong id="detail-number"></strong></div>
+                  <div><span>Plot type</span><strong id="detail-type"></strong></div>
+                  <div><span>Plot area</span><strong id="detail-area"></strong></div>
+                  <div><span>Area (sq. ft.)</span><strong id="detail-area-feet"></strong></div>
+                  <div><span>Road width</span><strong id="detail-road"></strong></div>
+                  <div><span>Facing</span><strong id="detail-direction"></strong></div>
+                </div>
+                <button id="request-booking" class="primary-button full-button" type="button" disabled>Choose an available plot</button>
+                <p class="booking-note">Submitting a request does not reserve the plot or confirm a sale. Our team will contact you after review.</p>
+              </div>
+            </aside>
+          </div>
+
+          <section class="list-card">
+            <div class="list-heading"><div><p class="eyebrow">PLOT REGISTER</p><h3>Current availability</h3></div><label class="search-wrap"><span aria-hidden="true">⌕</span><input id="plot-search" type="search" placeholder="Search plot number" aria-label="Search plot number"></label></div>
+            <div class="table-scroll"><table><thead><tr><th>Plot</th><th>Type</th><th>Area</th><th>Price</th><th>Status</th><th></th></tr></thead><tbody id="plot-rows"></tbody></table></div>
+            <p class="list-footnote">Availability can change while a request is being reviewed. Final price and terms are confirmed by the project team.</p>
+          </section>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="how-section">
+        <div class="how-heading"><p class="eyebrow">A CLEAR NEXT STEP</p><h2>From interest to a team conversation.</h2><p>Every online request is reviewed by the project team before any booking is confirmed.</p></div>
+        <div class="steps-grid">
+          <article><span>01</span><h3>Explore</h3><p>Review published plot information and choose an available plot that interests you.</p></article>
+          <article><span>02</span><h3>Send a request</h3><p>Share your contact details and submit a non-binding booking enquiry for the selected plot.</p></article>
+          <article><span>03</span><h3>Hear from our team</h3><p>A team member will follow up to discuss availability, pricing, documents, and next steps.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><a class="brand footer-brand" href="/live-booking-status"><span class="brand-mark">E</span><span>estate<span class="brand-light">desk</span></span></a><p>Live project information is provided for guidance. Please confirm current availability, pricing, and terms with the project team.</p><span>© 2026 EstateDesk</span></footer>
+
+    <dialog id="booking-dialog" class="booking-dialog" aria-labelledby="booking-title">
+      <form id="booking-form" class="booking-form">
+        <div class="dialog-heading"><div><p class="eyebrow">BOOKING ENQUIRY</p><h2 id="booking-title">Request this plot</h2><p id="booking-subtitle"></p></div><button id="close-booking" class="close-button" type="button" aria-label="Close booking form">×</button></div>
+        <div id="booking-form-body">
+          <div class="request-summary"><span>Selected plot</span><strong id="booking-plot"></strong><span>Indicative price</span><strong id="booking-price"></strong></div>
+          <p class="request-disclaimer">This is a non-binding request only. No payment is collected here and the plot is not reserved until your request is reviewed and confirmed by the project team.</p>
+          <div class="form-grid">
+            <label>Full name<input class="field-input" name="name" autocomplete="name" maxlength="150" required></label>
+            <label>Mobile number<input class="field-input" name="mobile" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="+91 98765 43210" required></label>
+            <label class="form-span">Email address <span class="optional">(optional)</span><input class="field-input" name="email" type="email" autocomplete="email" maxlength="255" placeholder="you@example.com"></label>
+            <label class="form-span">Message <span class="optional">(optional)</span><textarea class="field-input" name="message" rows="3" maxlength="1000" placeholder="Preferred time to call or any questions"></textarea></label>
+            <label class="honeypot" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+            <label class="consent-label form-span"><input name="consent" type="checkbox" required><span>I agree that the project team may contact me about this plot request. I have read the non-binding request notice above.</span></label>
+          </div>
+          <p id="booking-error" class="form-error" role="alert" aria-live="polite"></p>
+          <button id="submit-booking" class="primary-button full-button" type="submit">Send booking request <span aria-hidden="true">→</span></button>
+          <p class="privacy-note">Your contact details are shared with the project team only to respond to this request.</p>
+        </div>
+        <div id="booking-success" class="booking-success hidden" role="status" aria-live="polite"><span class="success-icon">✓</span><h3>Request received</h3><p id="success-copy"></p><div class="success-reference"><span>Request reference</span><strong id="success-reference"></strong></div><button id="finish-booking" class="primary-button full-button" type="button">Done</button></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </body>
+</html>

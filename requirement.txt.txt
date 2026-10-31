@@ -1,0 +1,1794 @@
+# Final Development Specification — Real Estate CRM & Plot Inventory Management System
+
+Requirements finalized Development specification v1.0
+
+The product scope is now finalized based on your five decisions.
+
+The system will be a web-based Real Estate CRM with mobile-responsive access, connected to your existing website through APIs. It will support multiple projects, interactive plot layouts, real-time inventory, employee and broker access, customer management, and manager-approved bookings.
+
+The uploaded Ratanpur layout (Survey No. 254/1) will be the reference for the interactive plot management module.
+
+## 1. Finalized product configuration
+
+| Requirement | Final decision |
+| --- | --- |
+| Website | Existing website; API integration |
+| Plot layout | Uploaded layout converted into editable interactive plots |
+| Platform | Web CRM, mobile responsive |
+| Booking approval | Mandatory manager approval |
+| Sales access | Employees and brokers |
+| Inventory source | Central CRM database |
+| Real-time updates | WebSocket / webhooks |
+| Database | PostgreSQL |
+| Backend | Node.js + NestJS |
+| Frontend | React.js / Next.js |
+
+### Core operating principle
+
+Central CRM Database
+
+Master record for all projects, plots, customers and bookings
+
+Secure APIs + real-time events
+
+CRM Dashboard
+
+Admin, managers, employees, brokers and accounts
+
+Existing Website
+
+Public plot map, availability and enquiries
+
+The website must never independently decide whether a plot is available. The CRM backend will own that decision.
+
+## 2. Detailed system architecture
+
+### 2.1 Recommended technology stack
+
+| Layer | Technology | Responsibility |
+| --- | --- | --- |
+| Frontend | Next.js + React | CRM interface |
+| UI | Tailwind CSS + component library | Responsive design |
+| Backend | NestJS + Node.js | Business logic and APIs |
+| Database | PostgreSQL | Main application database |
+| ORM | Prisma | Database access and migrations |
+| Real-time | Socket.IO | Live plot status updates |
+| Cache | Redis | Sessions, caching and distributed locks where needed |
+| Background jobs | BullMQ + Redis | Notifications, webhook retries and scheduled tasks |
+| File storage | AWS S3 compatible storage | Layouts and documents |
+| Authentication | JWT + refresh token rotation | Secure login |
+| API documentation | OpenAPI / Swagger | Developer documentation |
+| Deployment | Docker + AWS/Azure | Production hosting |
+| Monitoring | Sentry + infrastructure monitoring | Error tracking and performance |
+
+Architecture recommendation: Start with a modular monolithic backend rather than microservices. This keeps booking transactions and inventory updates easier to manage. Individual modules can be separated into services later if scale requires it.
+
+### 2.2 System architecture diagram
+
+mermaid
+
+```mermaid
+
+flowchart TB
+    U[CRM Users]
+    W[Existing Public Website]
+    FE[Next.js CRM Frontend]
+    API[NestJS API Backend]
+
+    U --> FE
+    W --> API
+    FE --> API
+
+    API --> AUTH[Authentication and RBAC]
+    API --> PROJECT[Project Management]
+    API --> INVENTORY[Plot Inventory]
+    API --> CRM[Leads and Customers]
+    API --> BOOKING[Booking and Approval]
+    API --> PAYMENT[Payment Management]
+    API --> INTEGRATION[Website Integration]
+
+    AUTH --> DB[(PostgreSQL)]
+    PROJECT --> DB
+    INVENTORY --> DB
+    CRM --> DB
+    BOOKING --> DB
+    PAYMENT --> DB
+    INTEGRATION --> DB
+
+    API --> REDIS[(Redis)]
+    API --> STORAGE[Object Storage]
+    API --> WS[Socket.IO]
+    API --> QUEUE[Background Jobs]
+
+    WS --> FE
+    WS --> W
+    QUEUE --> NOTIFY[Email SMS WhatsApp]
+    QUEUE --> WEBHOOK[Website Webhooks]
+```
+
+### 2.3 Application modules
+
+The backend should be divided into these logical modules:
+
+| Module | Main responsibility |
+| --- | --- |
+| Auth | Login, logout, token management |
+| Users | Employee and broker accounts |
+| RBAC | Roles, permissions and project access |
+| Projects | Project and site information |
+| Layouts | Upload and edit plot layouts |
+| Inventory | Plot records and availability |
+| Customers | Customer profiles |
+| Leads | Enquiries and follow-ups |
+| Bookings | Booking requests and approval |
+| Payments | Booking payments and receipts |
+| Documents | Secure file management |
+| Notifications | In-app, email and SMS notifications |
+| Reports | Inventory and sales analytics |
+| Integrations | Website APIs and webhooks |
+| Audit | Activity and status history |
+
+## 3. Interactive plot layout — detailed specification
+
+This is the most important custom development component because it must reproduce the functionality of your uploaded layout.
+
+### 3.1 Layout digitization
+
+The uploaded image will initially be used as the background reference.
+
+The development team must:
+
+1. Upload the original high-resolution project layout.
+2. Store the original image without alteration.
+3. Create a digital coordinate system over the image.
+4. Trace each individual plot boundary.
+5. Assign a unique plot record to each boundary.
+6. Match the boundary with its actual plot number.
+7. Enter the corresponding plot area and measurements.
+8. Verify all plot positions against the original layout.
+9. Save the editable layout.
+
+Important: Do not use OCR or automatic image detection as the sole source of plot boundaries. The image is a reference, and each plot must be verified against the actual survey/layout plan.
+
+### 3.2 Layout editor
+
+The administrator should have an editing interface with:
+
+- Upload background image.
+- Add plot boundary.
+- Draw polygon.
+- Edit polygon points.
+- Move plot boundary.
+- Resize boundary.
+- Assign plot number.
+- Assign plot database record.
+- Delete an incorrect boundary.
+- Undo and redo.
+- Zoom and pan.
+- Save draft.
+- Publish layout.
+- Restore previous layout version.
+
+Use SVG polygons for plot boundaries, with an image background.
+
+Each polygon should have a permanent plot ID, so changing the visual position never changes the underlying inventory record.
+
+### 3.3 Example layout data structure
+
+A plot boundary can be stored as normalized coordinates from 0 to 1.
+
+json
+
+```json
+{
+  "plot_id": "uuid",
+  "plot_number": "01",
+  "layout_id": "uuid",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [0.30, 0.20],
+        [0.44, 0.20],
+        [0.44, 0.35],
+        [0.30, 0.35],
+        [0.30, 0.20]
+      ]
+    ]
+  },
+  "display_order": 1
+}
+```
+
+Normalized coordinates ensure the layout works across desktop, tablet and mobile screen sizes.
+
+For complex plot shapes, support multiple polygon vertices and optional multipolygon geometry.
+
+### 3.4 Interactive map appearance
+
+Коттеджный поселок Река-река в Одинцовском районе - отзывы, цены, фото, план
+
+[poselkino.ru](<https://poselkino.ru/poselki/reka-reka/?utm_source=chatgpt.com>)
+
+Each plot must change color automatically based on its current inventory status.
+
+| Status | Display color |
+| --- | --- |
+| Available | Green |
+| Hold | Yellow |
+| Booking Pending | Orange |
+| Booked | Red |
+| Registered/Sold | Dark Blue |
+| Blocked | Grey |
+
+### 3.5 Plot detail panel
+
+When a user clicks a plot, show:
+
+Basic information
+
+- Project name.
+- Plot number.
+- Survey number.
+- Plot area in square yards.
+- Plot area in square feet.
+- Dimensions.
+- Direction.
+- Road width.
+- Plot category.
+
+Commercial information
+
+- Current price.
+- Rate per square yard.
+- Discount, if authorized.
+- Additional charges, if applicable.
+
+Availability
+
+- Current status.
+- Hold expiry.
+- Last status update.
+- Assigned salesperson.
+
+Booking details
+
+Only users with the appropriate permissions can see:
+
+- Customer information.
+- Booking amount.
+- Booking date.
+- Booking reference.
+- Payment status.
+
+Public website visitors must only receive published plot information and availability, never private customer or booking details.
+
+### 3.6 Layout version management
+
+Every published layout should have a version number.
+
+For example:
+
+- Layout V1 — Initial plot mapping.
+- Layout V2 — Boundary corrections.
+- Layout V3 — Additional plots.
+
+A layout revision must not change plot IDs or existing bookings. If a plot needs to be subdivided or merged, use a controlled inventory restructuring workflow with approval and historical record preservation.
+
+## 4. Detailed inventory and booking workflow
+
+### 4.1 Plot status state machine
+
+mermaid
+
+```mermaid
+
+stateDiagram-v2
+    [*] --> Available
+    Available --> Hold: Authorized hold
+    Hold --> Available: Expired or released
+    Hold --> BookingPending: Booking submitted
+    BookingPending --> Booked: Manager approves
+    BookingPending --> Available: Manager rejects
+    Booked --> Registered: Registration completed
+    Booked --> Available: Approved cancellation
+    Available --> Blocked: Admin blocks
+    Blocked --> Available: Admin releases
+```
+
+A booking request must never automatically make a plot Booked.
+
+The booking is confirmed only after manager approval and the required business checks.
+
+### 4.2 Booking workflow
+
+| Step | User | Action | Result |
+| --- | --- | --- | --- |
+| 1 | Salesperson/Broker | Selects available plot | Plot details shown |
+| 2 | Salesperson/Broker | Requests temporary hold | Hold request processed |
+| 3 | Salesperson/Broker | Adds customer details | Customer linked |
+| 4 | Salesperson/Broker | Submits booking | Booking Pending |
+| 5 | Manager | Reviews booking | Approve or reject |
+| 6 | Manager | Approves booking | Plot becomes Booked |
+| 7 | Accounts | Records payment | Payment history updated |
+| 8 | Manager/Admin | Completes registration workflow | Plot becomes Registered/Sold |
+
+### 4.3 Booking approval rules
+
+The manager approval screen should display:
+
+- Booking ID.
+- Project.
+- Plot number.
+- Plot area.
+- Selling price.
+- Customer information.
+- Salesperson or broker.
+- Booking amount.
+- Payment evidence.
+- Booking documents.
+- Previous plot status.
+- Booking remarks.
+
+Available actions:
+
+- Approve.
+- Reject.
+- Request correction.
+- Cancel, where authorized.
+
+Every action requires an audit entry.
+
+### 4.4 Preventing double booking
+
+This is a mandatory backend requirement.
+
+When two users submit a request for the same plot:
+
+1. Backend checks current plot status.
+2. Backend validates active hold ownership and expiry.
+3. Backend executes a database transaction.
+4. Backend locks the plot record or uses an equivalent concurrency-safe conditional update.
+5. Only one request succeeds.
+6. The second request receives an HTTP 409 Conflict response.
+
+Use PostgreSQL transactions and conditional state transitions. Redis locks alone must never be relied upon as the booking correctness mechanism.
+
+### 4.5 Hold policy
+
+Recommended configurable default:
+
+- Hold duration: 30 minutes.
+- Extension: manager-authorized.
+- Automatic expiry: enabled.
+- Hold release: salesperson or manager according to permission.
+- Expired holds: automatically return to Available if no active booking exists.
+
+These values should be configurable by project.
+
+A submitted booking should have a separate pending-review expiry policy. A pending approval must not remain open indefinitely.
+
+## 5. Role-based access and permissions specification
+
+### 5.1 Roles
+
+1. Super Admin.
+2. Project Manager.
+3. Sales Manager.
+4. Sales Executive.
+5. Broker / Channel Partner.
+6. Accounts Executive.
+7. Website Visitor.
+
+### 5.2 Detailed permission rules
+
+| Operation | Admin | Project Manager | Sales Manager | Sales Executive | Broker | Accounts |
+| --- | --- | --- | --- | --- | --- | --- |
+| Create projects | Yes | No | No | No | No | No |
+| Edit layouts | Yes | Assigned, if authorized | No | No | No | No |
+| View inventory | All | Assigned | Assigned | Assigned | Assigned | Assigned |
+| Create hold | Yes | Yes | Yes | Yes | Yes | No |
+| Submit booking | Yes | Yes | Yes | Yes | Yes | No |
+| Approve booking | Yes | Yes | Yes | No | No | No |
+| Modify price | Yes | Authorized | Authorized | No | No | No |
+| View customer details | All | Assigned | Assigned | Own/authorized | Own/authorized | Booking-related |
+| Record payments | Yes | View | View | No | No | Yes |
+| Manage employees | Yes | No | No | No | No | No |
+| View financial reports | Yes | Authorized | Authorized | Own/limited | Own commission | Yes |
+
+All access must be enforced on the backend.
+
+The UI hiding a button is not sufficient security.
+
+### 5.3 Broker-specific rules
+
+Brokers should have a separate account type and organization association.
+
+Each broker can:
+
+- View assigned projects.
+- View public and broker-authorized inventory.
+- Submit customer leads.
+- Request holds.
+- Submit booking requests.
+- Track their own leads.
+- Track their booking commissions.
+
+Brokers must not:
+
+- View other brokers' leads.
+- Access internal employee reports.
+- Access other brokers' commission records.
+- Modify pricing.
+- Approve bookings.
+- View unrelated customer documents.
+
+A customer lead should have an ownership and attribution record. Duplicate leads must be detected before assigning commission credit.
+
+## 6. Database schema — PostgreSQL
+
+The following is the recommended logical database design.
+
+### 6.1 Database relationships
+
+mermaid
+
+```mermaid
+
+erDiagram
+    USERS ||--o{ USER_ROLES : has
+    ROLES ||--o{ USER_ROLES : assigned
+    ROLES ||--o{ ROLE_PERMISSIONS : contains
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : maps
+    USERS ||--o{ USER_PROJECTS : assigned
+    PROJECTS ||--o{ USER_PROJECTS : includes
+
+    PROJECTS ||--o{ PLOTS : contains
+    PROJECTS ||--o{ LAYOUTS : has
+    LAYOUTS ||--o{ PLOT_LAYOUTS : maps
+    PLOTS ||--o{ PLOT_LAYOUTS : displayed
+
+    PLOTS ||--o{ PLOT_STATUS_HISTORY : tracks
+    CUSTOMERS ||--o{ LEADS : owns
+    PROJECTS ||--o{ LEADS : generates
+    USERS ||--o{ LEADS : assigned
+    LEADS ||--o{ LEAD_ACTIVITIES : contains
+
+    CUSTOMERS ||--o{ BOOKINGS : makes
+    PLOTS ||--o{ BOOKINGS : reserved
+    USERS ||--o{ BOOKINGS : submits
+    BOOKINGS ||--o{ BOOKING_APPROVALS : requires
+    BOOKINGS ||--o{ PAYMENTS : receives
+    BOOKINGS ||--o{ DOCUMENTS : contains
+
+    USERS ||--o{ AUDIT_LOGS : creates
+    API_CLIENTS ||--o{ WEBHOOK_DELIVERIES : sends
+```
+
+### 6.2 Main database tables
+
+A. users
+
+| Column | Type | Description |
+| --- | --- | --- |
+| id | UUID | Primary key |
+| full\_name | VARCHAR(150) | User name |
+| email | VARCHAR(255) | Unique email |
+| mobile | VARCHAR(20) | Mobile number |
+| password\_hash | TEXT | Hashed password |
+| user\_type | VARCHAR(30) | Employee/Broker |
+| organization\_id | UUID | Broker company, if applicable |
+| is\_active | BOOLEAN | Account status |
+| created\_at | TIMESTAMPTZ | Created time |
+| updated\_at | TIMESTAMPTZ | Updated time |
+
+B. roles
+
+| Column | Type |
+| --- | --- |
+| id | UUID |
+| name | VARCHAR(80) |
+| description | TEXT |
+| is\_system\_role | BOOLEAN |
+
+C. permissions
+
+| Column | Type |
+| --- | --- |
+| id | UUID |
+| permission\_key | VARCHAR(120) |
+| module | VARCHAR(80) |
+| description | TEXT |
+
+Examples of permission keys:
+
+text
+
+```text
+project.view
+project.create
+project.update
+plot.view
+plot.update
+plot.hold
+booking.create
+booking.approve
+booking.reject
+payment.create
+report.view
+layout.edit
+api.manage
+```
+
+D. user\_roles
+
+- id
+- user\_id
+- role\_id
+- assigned\_by
+- assigned\_at
+
+E. user\_projects
+
+- id
+- user\_id
+- project\_id
+- access\_level
+- assigned\_by
+
+This table restricts employees and brokers to assigned projects.
+
+F. projects
+
+| Column | Type |
+| --- | --- |
+| id | UUID |
+| project\_code | VARCHAR(50) |
+| project\_name | VARCHAR(200) |
+| survey\_number | VARCHAR(100) |
+| village | VARCHAR(150) |
+| taluka | VARCHAR(150) |
+| district | VARCHAR(150) |
+| state | VARCHAR(100) |
+| pincode | VARCHAR(10) |
+| project\_type | VARCHAR(50) |
+| total\_land\_area | NUMERIC(14,2) |
+| area\_unit | VARCHAR(20) |
+| latitude | NUMERIC(10,7) |
+| longitude | NUMERIC(10,7) |
+| description | TEXT |
+| status | VARCHAR(30) |
+| created\_at | TIMESTAMPTZ |
+
+G. plots
+
+| Column | Type |
+| --- | --- |
+| id | UUID |
+| project\_id | UUID |
+| plot\_number | VARCHAR(50) |
+| plot\_type | VARCHAR(50) |
+| area\_sq\_yard | NUMERIC(12,2) |
+| area\_sq\_feet | NUMERIC(12,2) |
+| length | NUMERIC(12,2) |
+| width | NUMERIC(12,2) |
+| dimension\_unit | VARCHAR(20) |
+| direction | VARCHAR(20) |
+| road\_width | NUMERIC(10,2) |
+| base\_price | NUMERIC(14,2) |
+| current\_price | NUMERIC(14,2) |
+| status | VARCHAR(30) |
+| assigned\_sales\_user\_id | UUID |
+| created\_at | TIMESTAMPTZ |
+| updated\_at | TIMESTAMPTZ |
+
+Unique constraint:
+
+`UNIQUE(project_id, plot_number)`
+
+Money must use fixed-precision numeric types, not floating-point values.
+
+H. layouts
+
+- id
+- project\_id
+- layout\_name
+- image\_url
+- image\_width
+- image\_height
+- version\_number
+- status (Draft/Published/Archived)
+- created\_by
+- published\_by
+- published\_at
+- created\_at
+
+I. plot\_layouts
+
+- id
+- layout\_id
+- plot\_id
+- geometry (JSONB)
+- label\_position (JSONB)
+- display\_order
+- created\_at
+
+Geometry stores the editable plot polygon.
+
+J. plot\_status\_history
+
+- id
+- plot\_id
+- previous\_status
+- new\_status
+- changed\_by
+- reason
+- reference\_type
+- reference\_id
+- created\_at
+
+K. customers
+
+- id
+- customer\_code
+- full\_name
+- mobile
+- alternate\_mobile
+- email
+- address
+- city
+- state
+- pincode
+- created\_at
+- updated\_at
+
+L. leads
+
+- id
+- lead\_code
+- customer\_id
+- project\_id
+- interested\_plot\_id
+- assigned\_user\_id
+- source
+- lead\_status
+- broker\_id
+- budget
+- next\_followup\_at
+- remarks
+- created\_at
+- updated\_at
+
+M. lead\_activities
+
+- id
+- lead\_id
+- user\_id
+- activity\_type
+- activity\_notes
+- scheduled\_at
+- completed\_at
+- created\_at
+
+N. bookings
+
+- id
+- booking\_code
+- plot\_id
+- customer\_id
+- lead\_id
+- submitted\_by
+- salesperson\_id
+- broker\_id
+- booking\_amount
+- total\_price
+- booking\_status
+- submitted\_at
+- approved\_by
+- approved\_at
+- rejection\_reason
+- cancellation\_reason
+- created\_at
+- updated\_at
+
+O. booking\_approvals
+
+- id
+- booking\_id
+- approver\_id
+- decision
+- remarks
+- decided\_at
+
+P. payments
+
+- id
+- booking\_id
+- receipt\_number
+- amount
+- payment\_mode
+- transaction\_reference
+- payment\_date
+- payment\_status
+- receipt\_document\_id
+- recorded\_by
+- created\_at
+
+Q. documents
+
+- id
+- entity\_type
+- entity\_id
+- document\_type
+- file\_name
+- storage\_key
+- mime\_type
+- file\_size
+- uploaded\_by
+- created\_at
+
+R. notifications
+
+- id
+- user\_id
+- title
+- message
+- notification\_type
+- reference\_type
+- reference\_id
+- is\_read
+- created\_at
+
+S. audit\_logs
+
+- id
+- user\_id
+- action
+- module
+- entity\_type
+- entity\_id
+- old\_values (JSONB)
+- new\_values (JSONB)
+- ip\_address
+- created\_at
+
+T. api\_clients
+
+- id
+- client\_name
+- client\_identifier
+- secret\_hash
+- scopes
+- is\_active
+- created\_at
+
+U. webhook\_subscriptions
+
+- id
+- target\_url
+- subscribed\_events
+- signing\_secret\_encrypted
+- is\_active
+- created\_at
+
+V. webhook\_deliveries
+
+- id
+- subscription\_id
+- event\_id
+- event\_type
+- payload
+- response\_status
+- attempt\_count
+- next\_attempt\_at
+- delivered\_at
+- created\_at
+
+### 6.3 Additional database requirements
+
+- Use UUID primary keys.
+- Use foreign keys on all relational references.
+- Use indexes on project\_id, plot\_id, booking\_status, customer mobile and lead assignment.
+- Use soft deletion only for records where deletion is appropriate.
+- Never physically delete confirmed booking or payment history.
+- Maintain created\_at and updated\_at timestamps.
+- Use database migrations for schema changes.
+- Use decimal/numeric types for all financial values.
+- Store timestamps in UTC and render them in the user's local timezone.
+- Use database constraints to prevent multiple active bookings for the same plot.
+
+### 6.4 Critical booking database constraint
+
+A partial unique index is recommended:
+
+sql
+
+```sql
+CREATE UNIQUE INDEX
+  unique_active_booking_per_plot
+ON bookings (plot_id)
+WHERE booking_status IN (
+  'PENDING_APPROVAL',
+  'APPROVED'
+);
+```
+
+The application must also enforce the corresponding plot status transition inside a transaction.
+
+A cancelled or rejected booking must not block future bookings.
+
+## 7. Complete API specification
+
+### 7.1 API standards
+
+Base URL:
+
+text
+
+```text
+https://crm.yourdomain.com/api/v1
+```
+
+All APIs should use:
+
+- REST architecture.
+- JSON request/response format.
+- HTTPS.
+- Bearer token authentication for authorized users.
+- API client authentication for website-to-CRM communication.
+- Standard HTTP status codes.
+- Pagination.
+- Request validation.
+- API versioning.
+- Structured error responses.
+
+### 7.2 Authentication APIs
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/auth/login` | User login |
+| POST | `/auth/refresh` | Refresh token |
+| POST | `/auth/logout` | Logout |
+| GET | `/auth/me` | Current user details |
+| POST | `/auth/forgot-password` | Password reset request |
+| POST | `/auth/reset-password` | Reset password |
+
+### 7.3 Project APIs
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/projects` | List accessible projects |
+| POST | `/projects` | Create project |
+| GET | `/projects/:id` | Project details |
+| PATCH | `/projects/:id` | Update project |
+| GET | `/projects/:id/inventory-summary` | Inventory summary |
+| GET | `/projects/:id/layouts` | List layouts |
+| POST | `/projects/:id/layouts` | Upload layout |
+
+### 7.4 Plot inventory APIs
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/projects/:id/plots` | List project plots |
+| POST | `/projects/:id/plots` | Create plot |
+| GET | `/plots/:id` | Get plot details |
+| PATCH | `/plots/:id` | Update plot |
+| POST | `/plots/import` | Bulk import plots |
+| GET | `/plots/export` | Export inventory |
+| POST | `/plots/:id/hold` | Request/create hold |
+| POST | `/plots/:id/release-hold` | Release hold |
+| GET | `/plots/:id/history` | Status history |
+
+### 7.5 Booking APIs
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/bookings` | Submit booking request |
+| GET | `/bookings` | List authorized bookings |
+| GET | `/bookings/:id` | Booking details |
+| POST | `/bookings/:id/approve` | Manager approval |
+| POST | `/bookings/:id/reject` | Manager rejection |
+| POST | `/bookings/:id/cancel` | Request cancellation |
+| POST | `/bookings/:id/complete-registration` | Mark registration completed |
+| GET | `/bookings/:id/history` | Booking history |
+
+### 7.6 Customer and lead APIs
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/customers` | Customer list |
+| POST | `/customers` | Create customer |
+| GET | `/customers/:id` | Customer details |
+| PATCH | `/customers/:id` | Update customer |
+| GET | `/leads` | List authorized leads |
+| POST | `/leads` | Create lead |
+| PATCH | `/leads/:id` | Update lead |
+| POST | `/leads/:id/activities` | Add activity |
+| POST | `/leads/:id/assign` | Assign lead |
+
+### 7.7 Payment APIs
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/bookings/:id/payments` | Record payment |
+| GET | `/bookings/:id/payments` | Payment history |
+| GET | `/payments/:id/receipt` | Receipt details |
+| POST | `/payments/:id/verify` | Verify payment |
+| GET | `/reports/payments` | Payment report |
+
+## 8. Existing website API integration specification
+
+This integration is a high-priority requirement.
+
+The existing website should continue operating as it currently does, but project and plot information will be fetched from the CRM backend.
+
+### 8.1 Website integration architecture
+
+There are two types of communication:
+
+Website → CRM
+
+- Fetch projects.
+- Fetch plot information.
+- Fetch current availability.
+- Submit customer enquiries.
+- Submit booking requests.
+
+CRM → Website
+
+- Notify when a plot becomes unavailable.
+- Notify when a hold expires.
+- Notify when a booking is rejected or cancelled.
+- Notify when plot details change.
+- Notify when a project layout is updated.
+
+### 8.2 Public website endpoints
+
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| GET | `/public/projects` | Public |
+| GET | `/public/projects/:id` | Public |
+| GET | `/public/projects/:id/plots` | Public |
+| GET | `/public/plots/:id` | Public |
+| POST | `/public/enquiries` | Public, protected by rate limiting |
+| POST | `/public/booking-requests` | Public, protected by rate limiting |
+| GET | `/public/projects/:id/inventory/stream` | Public, read-only |
+
+The public endpoints should return only approved and published information.
+
+### 8.3 Example: Project inventory response
+
+Request:
+
+http
+
+```http
+GET /api/v1/public/projects/PROJECT_UUID/plots
+```
+
+Response:
+
+json
+
+```json
+{
+  "success": true,
+  "data": {
+    "project_id": "PROJECT_UUID",
+    "project_name": "Ratanpur Residential Project",
+    "total_plots": 28,
+    "available_plots": 15,
+    "hold_plots": 2,
+    "booked_plots": 9,
+    "plots": [
+      {
+        "id": "PLOT_UUID_001",
+        "plot_number": "01",
+        "area_sq_yard": 407.71,
+        "area_sq_feet": 3669.36,
+        "road_width": 39.37,
+        "price": 0,
+        "status": "AVAILABLE"
+      },
+      {
+        "id": "PLOT_UUID_002",
+        "plot_number": "02",
+        "area_sq_yard": 359.60,
+        "area_sq_feet": 3236.36,
+        "road_width": 39.37,
+        "price": 0,
+        "status": "BOOKED"
+      }
+    ],
+    "updated_at": "2026-10-31T05:30:00Z"
+  }
+}
+```
+
+The price value is illustrative and should be replaced by the actual configured price or omitted if prices are not public.
+
+The returned counts must be calculated from the same inventory snapshot as the plot records.
+
+### 8.4 Website enquiry API
+
+Request:
+
+http
+
+```http
+POST /api/v1/public/enquiries
+Content-Type: application/json
+```
+
+Payload:
+
+json
+
+```json
+{
+  "customer_name": "Rahul Sharma",
+  "mobile": "9876543210",
+  "email": "rahul@example.com",
+  "project_id": "PROJECT_UUID",
+  "plot_id": "PLOT_UUID_001",
+  "source": "WEBSITE",
+  "message": "Interested in this residential plot",
+  "consent": true
+}
+```
+
+Response:
+
+json
+
+```json
+{
+  "success": true,
+  "message": "Enquiry submitted successfully",
+  "data": {
+    "enquiry_id": "ENQ-2026-00001",
+    "status": "NEW"
+  }
+}
+```
+
+The CRM should automatically:
+
+- Create or match the customer.
+- Create a lead.
+- Assign the lead according to project assignment rules.
+- Notify the assigned sales manager.
+- Record the original enquiry source.
+
+### 8.5 Website booking request API
+
+Request:
+
+http
+
+```http
+POST /api/v1/public/booking-requests
+```
+
+Payload:
+
+json
+
+```json
+{
+  "project_id": "PROJECT_UUID",
+  "plot_id": "PLOT_UUID_001",
+  "customer": {
+    "name": "Rahul Sharma",
+    "mobile": "9876543210",
+    "email": "rahul@example.com"
+  },
+  "message": "I want to book this plot"
+}
+```
+
+Response:
+
+json
+
+```json
+{
+  "success": true,
+  "message": "Booking request received",
+  "data": {
+    "request_id": "BR-2026-00001",
+    "status": "REQUESTED",
+    "requires_manager_approval": true
+  }
+}
+```
+
+A public booking request is not a confirmed booking. The backend must validate inventory and create the appropriate pending request without bypassing the manager approval process.
+
+If the plot is no longer available, return:
+
+json
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PLOT_NOT_AVAILABLE",
+    "message": "This plot is no longer available."
+  }
+}
+```
+
+HTTP status: `409 Conflict`.
+
+### 8.6 Real-time website synchronization
+
+Recommended implementation: Socket.IO or Server-Sent Events for live availability, plus signed webhooks for reliable server-to-server notification.
+
+Example event:
+
+json
+
+```json
+{
+  "event_id": "UUID",
+  "event": "plot.status.updated",
+  "timestamp": "2026-10-31T05:30:00Z",
+  "data": {
+    "project_id": "PROJECT_UUID",
+    "plot_id": "PLOT_UUID_001",
+    "plot_number": "01",
+    "previous_status": "AVAILABLE",
+    "new_status": "BOOKED",
+    "inventory_version": 105
+  }
+}
+```
+
+Required event types:
+
+text
+
+```text
+project.created
+project.updated
+layout.published
+plot.created
+plot.updated
+plot.status.updated
+plot.hold.created
+plot.hold.expired
+booking.submitted
+booking.approved
+booking.rejected
+booking.cancelled
+payment.recorded
+```
+
+### 8.7 Webhook reliability
+
+The CRM must implement:
+
+- HMAC-SHA256 webhook signatures.
+- Unique event IDs.
+- Delivery attempt history.
+- Automatic retries with exponential backoff.
+- Idempotent event processing.
+- Failed-delivery dashboard.
+- Manual retry.
+- Event timestamp and inventory version.
+
+The website should not rely solely on webhook notifications for its inventory database. It must be able to retrieve the latest inventory snapshot from the CRM after a disconnection.
+
+Important integration rule: Public API reads can be cached briefly, but the final availability check and every booking operation must use authoritative live database state.
+
+## 9. API error handling and security standards
+
+### 9.1 Standard HTTP status codes
+
+| Code | Meaning |
+| --- | --- |
+| 200 | Successful request |
+| 201 | Record created |
+| 204 | Successful request without response body |
+| 400 | Invalid input |
+| 401 | Unauthorized |
+| 403 | Permission denied |
+| 404 | Record not found |
+| 409 | Inventory conflict or duplicate |
+| 422 | Business rule validation failure |
+| 429 | Too many requests |
+| 500 | Internal server error |
+| 503 | Service temporarily unavailable |
+
+### 9.2 Security requirements
+
+1. Hash passwords using Argon2id or an appropriately configured secure password hashing algorithm.
+2. Use short-lived access tokens and rotating refresh tokens.
+3. Enforce project-level and record-level access permissions.
+4. Protect public enquiry endpoints from spam and abuse.
+5. Use HTTPS for all communication.
+6. Validate uploaded files and restrict allowed file types.
+7. Encrypt sensitive documents at rest.
+8. Keep website API credentials separate from employee accounts.
+9. Never expose internal database IDs as authorization credentials.
+10. Maintain login and sensitive-operation audit logs.
+11. Apply rate limits to public APIs.
+12. Implement backup and recovery procedures.
+13. Protect against SQL injection, XSS, CSRF and insecure direct object references.
+14. Do not expose internal customer records through public APIs.
+15. Apply configurable retention policies for personal data.
+
+For Indian operations, the implementation should also account for applicable DPDP Act requirements, consent handling, privacy notices, and applicable real estate regulatory requirements.
+
+### 9.3 Important booking security rule
+
+Only a user with the `booking.approve` permission and access to the relevant project can approve a booking.
+
+The backend must validate the approval permission and the booking state at the moment of approval, not just when the booking screen was first opened.
+
+## 10. Detailed frontend screen specification
+
+The CRM should have a consistent sidebar and a common project selector.
+
+### Screen 1: Login
+
+- Company logo.
+- Email/mobile.
+- Password.
+- Forgot password.
+- Secure authentication.
+- Role-based landing page.
+
+### Screen 2: Admin dashboard
+
+Real Estate Dashboard UI Design by Ovious.Studio UI/UX on Dribbble
+
+[dribbble.com](<https://dribbble.com/shots/26498747-Real-Estate-Dashboard-UI-Design?utm_source=chatgpt.com>)
+
+Required widgets:
+
+- Total projects.
+- Total plots.
+- Available plots.
+- Hold plots.
+- Booked plots.
+- Total customers.
+- Pending bookings.
+- Monthly sales.
+- Recent activity.
+- Inventory distribution.
+
+### Screen 3: Project list
+
+- Project name.
+- Project code.
+- Location.
+- Total plots.
+- Available plots.
+- Booked plots.
+- Project status.
+- Manage button.
+
+### Screen 4: Interactive plot inventory
+
+Plataforma de Gestión para Parcelaciones y Urbanismos
+
+[parcydigital.com](<https://parcydigital.com/?utm_source=chatgpt.com>)
+
+Screen structure:
+
+| Area | Content |
+| --- | --- |
+| Top bar | Project selector and search |
+| Left toolbar | Zoom, pan, select, draw |
+| Main panel | Interactive plot map |
+| Right panel | Selected plot details |
+| Bottom panel | Plot inventory summary and legend |
+
+The map must support desktop mouse interaction and mobile touch gestures.
+
+### Screen 5: Plot detail
+
+- Plot information.
+- Price information.
+- Availability.
+- Booking history.
+- Status history.
+- Customer details, permission-dependent.
+- Hold and booking actions.
+
+### Screen 6: Booking approval
+
+EstateNerve | Real Estate CRM, Inventory & Booking Software
+
+[estatenerve.com](<https://estatenerve.com/?utm_source=chatgpt.com>)
+
+The manager should see a queue of pending bookings, with filters by project, salesperson, broker, submission date and booking amount.
+
+### Screen 7: Lead management
+
+- Customer list.
+- Lead pipeline.
+- Assigned salesperson.
+- Source.
+- Follow-up date.
+- Interested project.
+- Interested plot.
+- Lead activity timeline.
+
+### Screen 8: Broker dashboard
+
+- Broker profile.
+- Assigned projects.
+- Submitted leads.
+- Booking requests.
+- Confirmed bookings.
+- Commission summary.
+- Commission status.
+
+### Screen 9: Accounts dashboard
+
+- Confirmed bookings.
+- Payment collection.
+- Payment due.
+- Receipts.
+- Refunds.
+- Payment reconciliation.
+
+### Screen 10: API integration settings
+
+- Website API client.
+- API status.
+- Webhook configuration.
+- Last synchronization.
+- Event delivery logs.
+- Retry failed webhooks.
+- Integration health.
+
+## 11. Module-wise development implementation plan
+
+Recommended implementation is in 10 development stages.
+
+| Stage | Module | Deliverables | Priority |
+| --- | --- | --- | --- |
+| 1 | Foundation | Repository, deployment, database, authentication | Critical |
+| 2 | RBAC | Roles, permissions, project access | Critical |
+| 3 | Projects | Project creation and configuration | Critical |
+| 4 | Layout editor | Image upload, plot drawing, editing and mapping | Critical |
+| 5 | Inventory | Plot records, filters and statuses | Critical |
+| 6 | Booking | Holds, booking requests and manager approval | Critical |
+| 7 | CRM | Customers, leads and follow-ups | High |
+| 8 | Website API | Public APIs, enquiries, webhooks and live updates | Critical |
+| 9 | Accounts and reports | Payments, receipts, sales reports | High |
+| 10 | Production readiness | Security, QA, backups and deployment | Critical |
+
+### Stage 1 — Foundation and authentication
+
+Development tasks:
+
+- Initialize frontend and backend repositories.
+- Configure database.
+- Implement authentication.
+- Implement user profile.
+- Implement user management.
+- Implement session management.
+- Set up logging and error handling.
+
+Deliverable: Users can securely log into the application.
+
+### Stage 2 — Role-based access
+
+Development tasks:
+
+- Create roles and permissions.
+- Build permission management.
+- Assign project access.
+- Implement broker organizations.
+- Enforce API-level permissions.
+- Build role-specific dashboards.
+
+Deliverable: Every user sees only authorized information and operations.
+
+### Stage 3 — Project management
+
+Development tasks:
+
+- Project creation.
+- Project editing.
+- Project configuration.
+- Location management.
+- Project document upload.
+- Project inventory summary.
+
+Deliverable: Admin can create multiple projects.
+
+### Stage 4 — Interactive layout editor
+
+Development tasks:
+
+- Upload original layout image.
+- Display image in the editor.
+- Add SVG polygon drawing tools.
+- Edit polygon coordinates.
+- Link plot polygons to database records.
+- Configure labels.
+- Save drafts.
+- Publish layouts.
+- Version management.
+
+Deliverable: Admin can digitally recreate and manage the uploaded Ratanpur layout.
+
+### Stage 5 — Plot inventory
+
+Development tasks:
+
+- Plot creation.
+- Excel/CSV import.
+- Area conversion and validation.
+- Price configuration.
+- Plot status management.
+- Inventory filtering.
+- Inventory reporting.
+
+Deliverable: All plots are manageable from a centralized inventory.
+
+### Stage 6 — Booking and approvals
+
+Development tasks:
+
+- Hold functionality.
+- Automatic hold expiry.
+- Booking request.
+- Customer association.
+- Manager approval queue.
+- Booking rejection.
+- Cancellation workflow.
+- Double-booking protection.
+- Status history.
+
+Deliverable: Complete booking lifecycle works reliably.
+
+### Stage 7 — Customer CRM
+
+Development tasks:
+
+- Customer profiles.
+- Lead creation.
+- Duplicate customer detection.
+- Lead assignment.
+- Follow-up reminders.
+- Site visit management.
+- Sales pipeline.
+
+Deliverable: Employees and brokers can manage their leads.
+
+### Stage 8 — Existing website integration
+
+Development tasks:
+
+- Configure website API client.
+- Develop public project APIs.
+- Develop plot inventory APIs.
+- Develop enquiry API.
+- Develop booking request API.
+- Implement real-time inventory updates.
+- Implement signed webhooks.
+- Test website integration.
+- Validate synchronization after outages.
+
+Deliverable: Website and CRM display synchronized plot availability.
+
+### Stage 9 — Accounts and reports
+
+Development tasks:
+
+- Payment entry.
+- Receipt generation.
+- Payment history.
+- Outstanding payment reports.
+- Sales reports.
+- Broker commission calculations.
+- Export to Excel/PDF.
+
+Deliverable: Financial operations and reporting.
+
+### Stage 10 — Production deployment
+
+Development tasks:
+
+- Security testing.
+- Performance testing.
+- Browser testing.
+- Mobile testing.
+- API testing.
+- Backup testing.
+- Recovery testing.
+- User acceptance testing.
+- Production deployment.
+- Admin training.
+
+Deliverable: Production-ready CRM.
+
+## 12. Development timeline and team structure
+
+A reasonable initial planning estimate is 12–16 weeks for a focused MVP and initial production release, assuming the existing website is accessible, the layout source can be verified, and the development team is available.
+
+| Workstream | Estimated duration |
+| --- | --- |
+| Foundation and authentication | 1–2 weeks |
+| RBAC and project management | 1–2 weeks |
+| Interactive plot editor | 2–3 weeks |
+| Inventory management | 1–2 weeks |
+| Booking and approvals | 2 weeks |
+| CRM and leads | 1–2 weeks |
+| Website API integration | 1–2 weeks |
+| QA and production deployment | 2 weeks |
+
+Some workstreams can run in parallel. The interactive layout editor and booking engine should receive dedicated engineering attention.
+
+### Recommended development team
+
+- 1 Product Manager / Business Analyst.
+- 1 UI/UX Designer.
+- 1 Frontend Developer.
+- 2 Backend Developers.
+- 1 QA Engineer.
+- 1 DevOps Engineer (part-time or shared).
+
+## 13. Testing and acceptance criteria
+
+Before production launch, the development team must demonstrate the following scenarios.
+
+### 13.1 Plot inventory tests
+
+- Admin creates a project.
+- Admin uploads the project layout.
+- Admin adds plot polygons.
+- Admin maps plot polygons to inventory records.
+- Admin enters plot area and price.
+- Admin publishes the layout.
+- Salesperson sees the updated layout.
+
+### 13.2 Booking tests
+
+Mandatory business-critical tests| Test | Expected result |
+| --- | --- |
+| Salesperson holds an available plot | Plot becomes Hold |
+| Hold expires | Plot becomes Available |
+| Salesperson submits booking | Booking Pending |
+| Manager approves booking | Plot becomes Booked |
+| Manager rejects booking | Plot returns to Available, if no other active reservation exists |
+| Two users book same plot | Only one request succeeds |
+| Unauthorized user approves booking | Access denied |
+| Approved cancellation | Plot becomes Available after authorized cancellation |
+| Registration completed | Plot becomes Registered/Sold |
+
+### 13.3 Website integration tests
+
+- Website fetches project information.
+- Website displays all published plots.
+- Website displays current plot status.
+- Website submits enquiries.
+- Enquiries appear in CRM.
+- Website submits booking requests.
+- Booking requests appear in manager approval queue.
+- CRM status changes reach website.
+- Failed webhook delivery is retried.
+- Website reconnects and retrieves the latest inventory after an outage.
+
+### 13.4 Role-based access tests
+
+Test every role independently.
+
+For example:
+
+- Broker cannot access another broker's customer.
+- Salesperson cannot approve their own booking.
+- Accounts user cannot edit plot availability.
+- Manager cannot access unassigned projects.
+- Website visitor cannot access internal customer details.
+- Admin can access all authorized management functions.
+
+### 13.5 Performance targets
+
+These are proposed engineering targets and should be validated under representative production load.
+
+| Metric | Target |
+| --- | --- |
+| Standard API response | P95 under 500 ms |
+| Inventory query | P95 under 1 second |
+| Real-time status propagation | Within 2 seconds under normal conditions |
+| Dashboard initial load | Under 3 seconds on a normal connection |
+| Booking concurrency | No double booking |
+| Availability API | Consistent with authoritative inventory |
+| Data backup | Daily, with point-in-time recovery where supported |
+
+## 14. Production deployment and infrastructure
+
+Recommended production environments:
+
+1. Development.
+2. Staging / UAT.
+3. Production.
+
+### Deployment structure
+
+Frontend Hosting
+
+Next.js CRM application
+
+Backend Application Server
+
+NestJS REST APIs and real-time server
+
+PostgreSQL
+
+Database
+
+Redis
+
+Cache / Jobs
+
+S3 Storage
+
+Files
+
+Monitoring, backups, logs and alerts
+
+### Backup and recovery
+
+Recommended starting configuration:
+
+- Automated daily database backups.
+- Point-in-time recovery.
+- Encrypted backup storage.
+- Separate backup access permissions.
+- Periodic restoration tests.
+- Document and layout backups.
+- Monitoring for failed backup jobs.
+
+Proposed initial recovery targets:
+
+- RPO: 15 minutes or better.
+- RTO: 4 hours or better.
+
+These targets depend on the selected hosting provider and database configuration.
+
+## 15. Development deliverables
+
+The software development company should provide the following deliverables.
+
+| No. | Deliverable | Required |
+| --- | --- | --- |
+| 1 | Complete UI/UX designs | Yes |
+| 2 | Frontend source code | Yes |
+| 3 | Backend source code | Yes |
+| 4 | PostgreSQL database schema | Yes |
+| 5 | Database migration scripts | Yes |
+| 6 | Interactive layout editor | Yes |
+| 7 | REST API documentation | Yes |
+| 8 | Website integration documentation | Yes |
+| 9 | Role and permission configuration | Yes |
+| 10 | Automated test cases | Yes |
+| 11 | Deployment documentation | Yes |
+| 12 | Backup and recovery documentation | Yes |
+| 13 | Admin user manual | Yes |
+| 14 | Source code ownership and handover | Yes |
+
+The client should own the application source code, database, hosting accounts, domain configuration, and integration credentials.
+
+## 16. Additional features recommended for future versions
+
+These are not required to launch the initial MVP, but the architecture should allow them.
+
+| Feature | Business benefit |
+| --- | --- |
+| WhatsApp Business integration | Automated enquiry and booking updates |
+| Mobile application | Dedicated employee and broker access |
+| Digital booking forms | Paperless booking |
+| E-signatures | Digital document workflow |
+| Broker commission automation | Simplified partner settlements |
+| Payment gateway | Online customer payments |
+| Google Maps integration | Project location visualization |
+| Advanced sales analytics | Revenue and conversion tracking |
+| Customer portal | Customers track their bookings |
+| Multi-company support | Manage multiple development companies |
+
+## 17. Final MVP scope — what developers must build first
+
+To avoid unnecessary development costs, I recommend keeping the first production release focused on these modules.
+
+## MVP scope
+
+Must-have for first releaseDevelopment checklist
+
+0/16 completed
+
+[ ]Secure login and role-based access
+
+[ ]Admin, manager, employee and broker accounts
+
+[ ]Multiple project management
+
+[ ]Upload and digitize uploaded plot layout
+
+[ ]Editable SVG plot boundaries
+
+[ ]Plot inventory with area, dimensions and price
+
+[ ]Live Available / Hold / Booked status
+
+[ ]Temporary plot holds and expiry
+
+[ ]Booking submission and manager approval
+
+[ ]Customer and lead management
+
+[ ]Existing website REST API integration
+
+[ ]Real-time website availability updates
+
+[ ]Enquiry synchronization
+
+[ ]Audit logs and inventory history
+
+[ ]Basic dashboards and reports
+
+[ ]Mobile-responsive interface
+
+## 18. Information required before actual development starts
+
+The functional scope is finalized, but the following implementation inputs need to be collected.
+
+| Information | Why it is needed |
+| --- | --- |
+| Existing website URL | Understand current technology and integration method |
+| Website source code or developer access | Implement API integration |
+| Original high-resolution layout | Digitize plot boundaries accurately |
+| Excel plot inventory | Import actual plot areas and numbers |
+| Project pricing data | Configure plot pricing |
+| Company logo and branding | CRM UI design |
+| Employee and broker list | Initial user setup |
+| Booking terms and conditions | Booking workflow |
+| Hold and cancellation policies | Configure inventory rules |
+| Hosting preference | Production deployment |
+
+Particularly important: The image you shared is sufficient to define the design, but the development team should obtain the original layout drawing or a high-resolution survey plan before finalizing plot boundaries. The area values and geometry should be verified against the authoritative project records.
+
+## 19. Final product definition
+
+# Real Estate CRM & Plot Management System
+
+Finalized product vision
+
+The platform will allow the company to manage all residential plots, projects, employees, brokers, customers, enquiries and bookings through one centralized application.
+
+The five essential capabilities:
+
+1. Interactive project layout with individually editable plots.
+2. Real-time plot availability across the CRM and existing website.
+3. Role-based access for management, sales employees and brokers.
+4. Manager-controlled booking approval with double-booking protection.
+5. Centralized customer, lead, payment and sales management.
+
+Technology foundation
+
+- Next.js + React
+- NestJS + Node.js
+- PostgreSQL + Prisma
+- Redis + Socket.IO
+- REST APIs + signed webhooks
+- AWS-compatible document storage
+
+## My recommendation for the next development step
+
+Start with a clickable CRM prototype and the interactive Ratanpur plot layout before building all the backend modules.
+
+This will validate the most distinctive part of the product: whether the actual numbered plots, their boundaries, their areas and their availability can be represented accurately and managed comfortably by your sales team.
+
+The first development milestone should therefore be:
+
+Milestone 1: Admin login → Create Ratanpur project → Upload layout → Digitize plots → Enter inventory → Click a plot → Change availability → See the updated status.
+
+Once that works, the booking engine and website API can be built on top of the same inventory foundation.
