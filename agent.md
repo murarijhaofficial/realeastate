@@ -129,3 +129,17 @@ See `README.md`. Quick start:
 
 - Fixed New Project and Add Plot listeners passing click events as existing records, which incorrectly selected edit mode.
 - Retained the form element across asynchronous saves so server errors display and the submit button is re-enabled. Creation permission messaging now matches the administrator-only API.
+
+### 2026-11-14 ? Flexible website JSON mapping
+
+- Added persistent per-key field mapping, nested/array-index paths, common aliases, admin mapping UI and non-persistent preview. Enforced explicit boolean consent, string phone numbers, ambiguity and unsafe-path rejection. One lead per request.
+- Applied migration 007 to configured database. Backend tests 16/16, frontend tests 6/6 and production build passed. Live WordPress delivery not verified.
+
+### 2026-11-14 ? Khushii website lead review
+
+- Reviewed public lead paths and documented confirmed issues and access limits in WEBSITE-LEAD-REVIEW.md. Expanded CRM website message length and preserved qualification fields as visible lead notes. Live WordPress plugin source and delivery verification remain pending.
+
+### 2026-11-14 ? Supplied WordPress plugin repairs
+
+- Added bridge delivery from chatbot and property enquiry handlers, enforced consent, canonical CRM payloads, Bearer key normalization, response confirmation, atomic queue claiming and interruption recovery. Packaged replacements under wordpress-plugin/repaired.
+- Six PHP files passed syntax parsing; ZIP integrity checked. No PHP runtime/WordPress execution tests available. Khushii Enquiry Pro source and live deployment verification remain missing.

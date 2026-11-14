@@ -16,6 +16,8 @@ import { HttpError, asyncHandler } from './errors.ts';
 import { inventoryEvents, publishInventoryEvent } from './realtime.ts';
 import { crmBookingSchema, idSchema, leadUpdateSchema, publicEnquirySchema, websiteKeySchema, websiteLeadSchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
 
+import { mapWebsiteLead, validateMapping, websiteLeadRemarks } from './lead-mapping.ts';
+
 const app = express();
 const api = express.Router();
 const backendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -820,9 +822,26 @@ api.get('/customers', ...authRoute(async (req, res) => {
 // API keys are administrator-managed, project-scoped and stored only as hashes.
 api.get('/integrations/website-keys', ...authRoute(async (req, res) => {
   if (req.user.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only administrators can manage integrations.');
-  const result = await pool.query(`SELECT k.id, k.name, k.key_prefix, k.project_id, p.project_name, k.created_at, k.last_used_at, k.revoked_at
+  const result = await pool.query(`SELECT k.id, k.name, k.key_prefix, k.project_id, p.project_name, k.created_at, k.last_used_at, k.revoked_at, k.field_mapping
     FROM website_api_keys k JOIN projects p ON p.id = k.project_id ORDER BY k.created_at DESC`);
   res.set('Cache-Control', 'no-store').json({ success: true, data: result.rows });
+}));
+
+api.post('/integrations/website-mapping/preview', ...authRoute(async (req, res) => {
+  if (req.user.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only administrators can manage integrations.');
+  res.set('Cache-Control', 'no-store').json({ success: true, data: mapWebsiteLead(req.body.sample, req.body.mapping ?? {}) });
+}));
+
+api.put('/integrations/website-keys/:keyId/mapping', ...authRoute(async (req, res) => {
+  if (req.user.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only administrators can manage integrations.');
+  const id = parse(idSchema, req.params.keyId);
+  const mapping = validateMapping(req.body.mapping);
+  await inTransaction(async (client) => {
+    const result = await client.query('UPDATE website_api_keys SET field_mapping = $2::jsonb WHERE id = $1 AND revoked_at IS NULL RETURNING id', [id, JSON.stringify(mapping)]);
+    if (!result.rowCount) throw new HttpError(404, 'KEY_NOT_FOUND', 'Active API key not found.');
+    await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'WEBSITE_MAPPING_UPDATED', 'integrations', 'website_api_key', id]);
+  });
+  res.json({ success: true, data: { mapping } });
 }));
 
 api.post('/integrations/website-keys', ...authRoute(async (req, res) => {
@@ -863,7 +882,7 @@ api.get('/integrations/website-leads', publicLimiter, asyncHandler(async (req, r
   if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, 'INVALID_PAGINATION', 'limit must be 1?100 and offset must be a non-negative integer.');
   if (req.query.external_id !== undefined && (typeof req.query.external_id !== 'string' || req.query.external_id.length > 150)) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid external_id.');
   const result = await inTransaction(async (client) => {
-    const keys = await client.query(`SELECT k.id, k.project_id FROM website_api_keys k JOIN projects p ON p.id = k.project_id
+    const keys = await client.query(`SELECT k.id, k.project_id, k.field_mapping FROM website_api_keys k JOIN projects p ON p.id = k.project_id
       WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND p.status = 'ACTIVE' FOR UPDATE OF k`, [crypto.createHash('sha256').update(token).digest('hex')]);
     if (!keys.rowCount) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
     const key = keys.rows[0];
@@ -882,13 +901,13 @@ api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, 
   const token = req.get('authorization')?.match(/^Bearer (ed_live_[A-Za-z0-9_-]{43})$/)?.[1];
   if (!token) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
   const hash = crypto.createHash('sha256').update(token).digest('hex');
-  const data = parse(websiteLeadSchema, req.body);
   const result = await inTransaction(async (client) => {
     // The lock serializes retries for a key and makes revocation effective for subsequent requests.
-    const keys = await client.query(`SELECT k.id, k.project_id FROM website_api_keys k JOIN projects p ON p.id = k.project_id
+    const keys = await client.query(`SELECT k.id, k.project_id, k.field_mapping FROM website_api_keys k JOIN projects p ON p.id = k.project_id
       WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND p.status = 'ACTIVE' FOR UPDATE OF k`, [hash]);
     if (!keys.rowCount) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
     const key = keys.rows[0];
+    const data = mapWebsiteLead(req.body, key.field_mapping ?? {});
     if (data.external_id) {
       const existing = await client.query(`SELECT l.lead_code FROM website_lead_receipts r JOIN leads l ON l.id = r.lead_id WHERE r.api_key_id = $1 AND r.external_id = $2`, [key.id, data.external_id]);
       if (existing.rowCount) return { lead_code: existing.rows[0].lead_code, duplicate: true };
@@ -899,7 +918,7 @@ api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, 
       WHERE up.project_id = $1 AND u.is_active AND u.role IN ('PROJECT_MANAGER','SALES_MANAGER')
       ORDER BY CASE u.role WHEN 'PROJECT_MANAGER' THEN 0 ELSE 1 END, u.id LIMIT 1`, [key.project_id]);
     const lead = (await client.query(`INSERT INTO leads (customer_id, project_id, assigned_user_id, source, lead_status, remarks)
-      VALUES ($1,$2,$3,'WEBSITE','NEW',$4) RETURNING id, lead_code`, [customer.id, key.project_id, assignee.rows[0]?.id ?? null, data.message || null])).rows[0];
+      VALUES ($1,$2,$3,'WEBSITE','NEW',$4) RETURNING id, lead_code`, [customer.id, key.project_id, assignee.rows[0]?.id ?? null, websiteLeadRemarks(data)])).rows[0];
     await client.query('INSERT INTO website_lead_receipts (api_key_id, external_id, lead_id) VALUES ($1,$2,$3)', [key.id, data.external_id ?? `generated:${crypto.randomUUID()}`, lead.id]);
     await client.query('UPDATE website_api_keys SET last_used_at = NOW() WHERE id = $1', [key.id]);
     await client.query('INSERT INTO audit_logs (action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4)', ['WEBSITE_API_LEAD_CREATED', 'leads', 'lead', lead.id]);

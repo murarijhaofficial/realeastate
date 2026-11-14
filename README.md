@@ -160,3 +160,12 @@ Use your website server with `Authorization: Bearer YOUR_WEBSITE_KEY`:
 - Access is restricted to the originating key and active project. Revoked keys fail with 401. Keep keys server-side; never embed them in browser JavaScript.
 - New submissions without external_id are tracked automatically, but cannot be safely retried without duplicates. Older submissions without receipts cannot be attributed to a website key and are excluded.
 - Pagination is offset-based; concurrent submissions can shift pages. Deduplicate results by enquiry_id when synchronizing.
+
+
+### Flexible website JSON
+
+Administrators can use Integrations ? Map JSON fields on each active website key. Map CRM fields to source paths such as `customer.name`, `contact.phone`, or `fields[0].value`. Preview sample JSON without saving it or creating a lead, then save the mapping. Unmapped fields accept common top-level aliases; ambiguous aliases require explicit mapping. Existing canonical payloads continue to work with an empty mapping.
+
+Send one JSON lead object per request (not a batch array). Mobile numbers and external IDs must be strings, and consent must be the JSON boolean `true`. Unknown fields are discarded. Always supply a stable external ID for retry protection. Authentication errors (401) still require a valid website key; mapping does not bypass authentication.
+
+Migration 007 adds persistent per-key mappings. Deploy the backend and frontend together after applying migrations. Preview endpoint: admin-authenticated `POST /api/v1/integrations/website-mapping/preview` with `{ "mapping": {}, "sample": {} }`. Save endpoint: admin-authenticated `PUT /api/v1/integrations/website-keys/:keyId/mapping` with `{ "mapping": {} }`.

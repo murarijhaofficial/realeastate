@@ -24,6 +24,7 @@ const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (
 let currentUser: User | null = null;
 let projects: Project[] = [];
 let currentLeads: Lead[] = [];
+let currentWebsiteKeys: WebsiteKey[] = [];
 let currentPlots: Plot[] = [];
 let currentLayout: ProjectLayout | undefined;
 let masterplanDrawing = false;
@@ -62,7 +63,7 @@ async function renderApp() {
     if (view === 'leads') { currentLeads = await api<Lead[]>('/leads'); body = leadsPage(currentLeads, Boolean(can('leads:write'))); }
     if (view === 'bookings') body = bookingsPage(await api<Booking[]>('/bookings'), Boolean(can('bookings:approve')));
     if (view === 'team') { if (currentUser.role !== 'ADMIN') { location.hash = '#dashboard'; return; } projects = await api<Project[]>('/projects'); body = teamPage(await api<User[]>('/users'), projects); }
-    if (view === 'integrations') { if (currentUser.role !== 'ADMIN') { location.hash = '#dashboard'; return; } projects = await api<Project[]>('/projects'); body = integrationsPage(await api<WebsiteKey[]>('/integrations/website-keys')); }
+    if (view === 'integrations') { if (currentUser.role !== 'ADMIN') { location.hash = '#dashboard'; return; } projects = await api<Project[]>('/projects'); currentWebsiteKeys = await api<WebsiteKey[]>('/integrations/website-keys'); body = integrationsPage(currentWebsiteKeys); }
     if (view === 'settings') body = settingsPage();
   } catch (error) { body = `<div class="error-panel"><h2>Unable to load this page</h2><p>${error instanceof Error ? error.message : 'Please refresh and try again.'}</p></div>`; }
   root.innerHTML = appShell(currentUser, view, body);
@@ -147,10 +148,14 @@ function bindPageActions() {
     const lead = currentLeads.find((item) => item.id === button.dataset.editLead);
     if (!lead) return;
     const statuses = ['NEW', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'CONVERTED', 'LOST'];
-    openDialog('Update lead', `<label>Status<select name="lead_status">${statuses.map((status) => `<option value="${status}" ${lead.lead_status === status ? 'selected' : ''}>${status.replaceAll('_', ' ')}</option>`).join('')}</select></label><label class="full-width">Notes<textarea name="remarks" maxlength="1000">${escapeHtml(lead.remarks)}</textarea></label>`, async (form) => { await api(`/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(form)) }); });
+    openDialog('Update lead', `<label>Status<select name="lead_status">${statuses.map((status) => `<option value="${status}" ${lead.lead_status === status ? 'selected' : ''}>${status.replaceAll('_', ' ')}</option>`).join('')}</select></label><label class="full-width">Notes<textarea name="remarks" maxlength="8000">${escapeHtml(lead.remarks)}</textarea></label>`, async (form) => { await api(`/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(form)) }); });
   }));
   document.querySelector('#invite-user')?.addEventListener('click', showUserForm);
   document.querySelector('#create-api-key')?.addEventListener('click', showWebsiteKeyForm);
+  document.querySelectorAll<HTMLButtonElement>('[data-map-key]').forEach((button) => button.addEventListener('click', () => {
+    const key = currentWebsiteKeys.find((item) => item.id === button.dataset.mapKey);
+    if (key) showLeadMappingForm(key);
+  }));
   document.querySelectorAll<HTMLButtonElement>('[data-revoke-key]').forEach((button) => button.addEventListener('click', async () => {
     if (!confirm('Revoke this key? The connected website will no longer be able to send leads with it.')) return;
     try { await api(`/integrations/website-keys/${button.dataset.revokeKey}`, { method: 'DELETE' }); await renderApp(); showToast('API key revoked.'); }
@@ -514,3 +519,20 @@ window.setInterval(async () => {
     if (viewFromHash() === 'projects' && projectIdFromHash() === projectId && !masterplanDrawing && !document.querySelector('.dialog-backdrop') && JSON.stringify(latest) !== JSON.stringify(currentPlots)) await renderApp();
   } catch { /* Retain the last displayed inventory until the next successful refresh. */ }
 }, 30000);
+
+function showLeadMappingForm(key: WebsiteKey) {
+  const fields = ['customer_name', 'mobile', 'email', 'message', 'consent', 'external_id', 'interest', 'project', 'category', 'plot_size', 'budget', 'timeline', 'visit_date', 'page_url', 'utm_source', 'utm_medium', 'utm_campaign'];
+  const mappingFrom = (form: FormData) => Object.fromEntries(fields.map((field) => [field, String(form.get(field) ?? '').trim()]).filter(([, path]) => path));
+  openDialog('Map website JSON fields', `<p class="full-width">Enter source paths such as customer.name, contact.phone or fields[0].value. Blank fields use common top-level aliases. Send one lead per request. Consent must be JSON true; phone numbers must be text.</p>${fields.map((field) => `<label>${escapeHtml(field)}<input name="${field}" maxlength="200" value="${escapeHtml(key.field_mapping?.[field] ?? '')}" placeholder="${field}"></label>`).join('')}<label class="full-width">Sample JSON (preview only)<textarea id="mapping-sample" rows="6" placeholder='{"name":"Example","phone":"+919876543210","consent":true}'></textarea></label><button type="button" class="secondary-button" id="preview-mapping">Preview without creating a lead</button><pre id="mapping-result" class="full-width" style="white-space:pre-wrap;overflow-wrap:anywhere" role="status"></pre>`, async (form) => {
+    await api(`/integrations/website-keys/${key.id}/mapping`, { method: 'PUT', body: JSON.stringify({ mapping: mappingFrom(form) }) });
+  }, '', 'Save mapping', 'Website field mapping saved.');
+  document.querySelector('#preview-mapping')?.addEventListener('click', async () => {
+    const output = document.querySelector('#mapping-result')!;
+    try {
+      const sample = JSON.parse(document.querySelector<HTMLTextAreaElement>('#mapping-sample')!.value);
+      const mapping = mappingFrom(new FormData(document.querySelector<HTMLFormElement>('#workspace-form')!));
+      const result = await api('/integrations/website-mapping/preview', { method: 'POST', body: JSON.stringify({ sample, mapping }) });
+      output.textContent = JSON.stringify(result, null, 2);
+    } catch (error) { output.textContent = error instanceof Error ? error.message : 'Preview failed.'; }
+  });
+}

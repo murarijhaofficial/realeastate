@@ -83,12 +83,12 @@ export const crmBookingSchema = z.object({
     email: z.union([z.string().trim().email().max(255), z.literal('')]).optional(),
     booking_amount: z.coerce.number().nonnegative().optional(),
   }),
-  remarks: z.string().trim().max(1000).optional(),
+  remarks: z.string().trim().max(8000).optional(),
 });
 
 export const leadUpdateSchema = z.object({
   lead_status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'CONVERTED', 'LOST']),
-  remarks: z.string().trim().max(1000).optional(),
+  remarks: z.string().trim().max(8000).optional(),
 });
 
 export const publicEnquirySchema = z.object({
@@ -103,5 +103,17 @@ export const publicEnquirySchema = z.object({
 
 export const websiteKeySchema = z.object({ name: z.string().trim().min(1).max(100), project_id: idSchema });
 export const websiteLeadSchema = publicEnquirySchema.omit({ project_id: true, plot_id: true }).extend({
+  message: z.string().trim().max(3000).optional(),
+  interest: z.string().trim().max(200).optional(),
+  project: z.string().trim().max(200).optional(),
+  category: z.string().trim().max(200).optional(),
+  plot_size: z.string().trim().max(200).optional(),
+  budget: z.string().trim().max(200).optional(),
+  timeline: z.string().trim().max(200).optional(),
+  visit_date: z.string().trim().max(200).optional(),
+  page_url: z.string().trim().max(2048).optional(),
+  utm_source: z.string().trim().max(200).optional(),
+  utm_medium: z.string().trim().max(200).optional(),
+  utm_campaign: z.string().trim().max(200).optional(),
   external_id: z.string().trim().min(1).max(150).optional(),
 });

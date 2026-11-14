@@ -1,0 +1,11 @@
+Install the three ZIPs as replacements for their existing plugins, keeping existing data. Back up WordPress first; validate on staging. Activate the bridge before testing the other two plugins.
+
+Set Khushii CRM Sync endpoint to your actual HTTPS CRM backend followed by /api/v1/integrations/website-leads. Use a fresh active ed_live_ website API key from CRM Integrations; keep CRM field mapping empty for this canonical bridge payload. A Bearer prefix pasted with the key is handled. Blank saved key fields preserve the prior key.
+
+Run Send Test Lead once; it creates a real test record. Require synced in the bridge queue and confirm its presence in CRM. Test a consented chatbot and project enquiry, then verify the correct project, contact details and notes. Queue retries must reuse the same record; a new form submission is a new source lead.
+
+All leads use the project associated with this bridge key. Project names in enquiry notes do not select another CRM project. For multiple CRM projects, separate routing configuration is still required.
+
+Main homepage/contact form uses Khushii Enquiry Pro, which was not supplied. Upload that plugin to complete its integration. Existing property leads are not automatically backfilled. Chatbot retry also sends email again. Newsletter and broken website links are not changed by these ZIPs.
+
+Checks: six PHP files passed syntax parsing; all three ZIPs passed archive integrity checks. PHP execution and live WordPress/CRM end-to-end delivery were not available and are not claimed verified.
