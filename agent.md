@@ -105,3 +105,13 @@ See `README.md`. Quick start:
 2. Add role-specific API tests and booking concurrency integration tests.
 3. Complete cancellation, registration, payments, lead activities/follow-ups, and plot import/export.
 4. Add durable signed webhooks, refresh-token rotation, persistent document storage, backup planning, and production security testing.
+
+### 2026-11-14 ? Lead workflow review
+
+- Reviewed existing role and project access, website enquiry endpoint, and lead UI. External lead providers and WhatsApp remain unconnected.
+- Added scoped lead status/notes updates with audit records, escaped lead list output, and stricter public enquiry validation. Documented the current website endpoint and integration limitations.
+
+### 2026-11-14 ? Website integration keys
+
+- Added admin-only integration screen and project-scoped, hashed website API keys with one-time display, revocation, audit logging and idempotent lead intake. Provider tiles explicitly identify unimplemented channels.
+- Added migration 006 and website server integration documentation.

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import app from '../src/app.ts';
-import { crmBookingSchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
+import { pool } from '../src/db.ts';
+import jwt from 'jsonwebtoken';
+import { crmBookingSchema, leadUpdateSchema, publicEnquirySchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema } from '../src/validation.ts';
 
 test('exposes backend service information and database health', async () => {
   const response = await request(app).get('/');
@@ -147,4 +149,71 @@ test('requires a valid role and a bcrypt-safe strong password for team accounts'
     password: 'x'.repeat(73),
     role: 'SALES_EXECUTIVE',
   }));
+});
+
+test('validates website enquiries and lead updates', () => {
+  const enquiry = { customer_name: 'Taylor', mobile: '9876543210', project_id: '045c55b7-dc35-4ed8-9250-29fd4ce5c607', consent: true };
+  assert.equal(parse(publicEnquirySchema, enquiry).customer_name, 'Taylor');
+  assert.throws(() => parse(publicEnquirySchema, { ...enquiry, consent: false }));
+  assert.throws(() => parse(publicEnquirySchema, { ...enquiry, customer_name: '   ' }));
+  assert.throws(() => parse(publicEnquirySchema, { ...enquiry, email: 'invalid' }));
+  assert.equal(parse(leadUpdateSchema, { lead_status: 'CONTACTED', remarks: 'Called' }).lead_status, 'CONTACTED');
+  assert.throws(() => parse(leadUpdateSchema, { lead_status: 'UNKNOWN' }));
+});
+
+test('lead updates require authentication', async () => {
+  const response = await request(app).patch('/api/v1/leads/045c55b7-dc35-4ed8-9250-29fd4ce5c607').send({ lead_status: 'CONTACTED' });
+  assert.equal(response.status, 401);
+});
+
+test('website API keys are admin-managed, project-scoped, deduplicate retries and reject revoked keys', async () => {
+  const originalQuery = pool.query;
+  const originalConnect = pool.connect;
+  const originalSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = 'test-secret-for-website-key-test';
+  const userId = '045c55b7-dc35-4ed8-9250-29fd4ce5c607';
+  const projectId = '8d8ddbbc-8878-4191-a0aa-4ca20a0f4868';
+  const keyId = '95ad4871-f30a-4b29-86b6-977aa035ccaa';
+  let role = 'ADMIN', keyHash, revoked = false, receipt = false, leadCount = 0;
+  pool.query = async (sql) => {
+    if (sql.includes('SELECT role, is_active, token_version FROM users')) return { rowCount: 1, rows: [{ role, is_active: true, token_version: 0 }] };
+    throw new Error(`Unexpected pool query: ${sql}`);
+  };
+  pool.connect = async () => ({
+    release() {},
+    async query(sql, args = []) {
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rows: [], rowCount: 0 };
+      if (sql.includes('SELECT id FROM projects')) return { rowCount: 1, rows: [{ id: projectId }] };
+      if (sql.includes('INSERT INTO website_api_keys')) { keyHash = args[2]; return { rowCount: 1, rows: [{ id: keyId, name: args[0], key_prefix: args[1], project_id: args[3] }] }; }
+      if (sql.includes('UPDATE website_api_keys SET revoked_at')) { revoked = true; return { rowCount: 1, rows: [{ id: keyId }] }; }
+      if (sql.includes('SELECT k.id, k.project_id')) return { rowCount: !revoked && args[0] === keyHash ? 1 : 0, rows: !revoked && args[0] === keyHash ? [{ id: keyId, project_id: projectId }] : [] };
+      if (sql.includes('SELECT l.lead_code FROM website_lead_receipts')) return { rowCount: receipt ? 1 : 0, rows: receipt ? [{ lead_code: 'LD-TEST' }] : [] };
+      if (sql.includes('SELECT id FROM customers')) return { rowCount: 0, rows: [] };
+      if (sql.includes('INSERT INTO customers')) return { rowCount: 1, rows: [{ id: userId }] };
+      if (sql.includes('SELECT u.id FROM users')) return { rowCount: 0, rows: [] };
+      if (sql.includes('INSERT INTO leads')) { leadCount++; assert.equal(args[1], projectId); return { rowCount: 1, rows: [{ id: userId, lead_code: 'LD-TEST' }] }; }
+      if (sql.includes('INSERT INTO website_lead_receipts')) receipt = true;
+      return { rowCount: 1, rows: [] };
+    },
+  });
+  try {
+    const auth = `Bearer ${jwt.sign({ id: userId, token_version: 0 }, process.env.JWT_SECRET)}`;
+    role = 'SALES_MANAGER';
+    assert.equal((await request(app).post('/api/v1/integrations/website-keys').set('Authorization', auth).send({ name: 'Site', project_id: projectId })).status, 403);
+    role = 'ADMIN';
+    const created = await request(app).post('/api/v1/integrations/website-keys').set('Authorization', auth).send({ name: 'Site', project_id: projectId });
+    assert.equal(created.status, 201);
+    const key = created.body.data.key;
+    assert.ok(key.startsWith('ed_live_'));
+    assert.notEqual(keyHash, key);
+    const payload = { customer_name: 'Taylor', mobile: '9876543210', consent: true, external_id: 'form-1', project_id: userId };
+    const submit = () => request(app).post('/api/v1/integrations/website-leads').set('Authorization', `Bearer ${key}`).send(payload);
+    assert.equal((await submit()).status, 201);
+    const retry = await submit();
+    assert.equal(retry.status, 200);
+    assert.equal(retry.body.data.duplicate, true);
+    assert.equal(leadCount, 1);
+    assert.equal((await request(app).delete(`/api/v1/integrations/website-keys/${keyId}`).set('Authorization', auth)).status, 200);
+    assert.equal((await submit()).status, 401);
+  } finally { pool.query = originalQuery; pool.connect = originalConnect; if (originalSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = originalSecret; }
 });

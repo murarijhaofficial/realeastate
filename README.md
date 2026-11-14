@@ -119,3 +119,32 @@ Public project and inventory APIs expose only active projects with a published l
 This is the initial MVP milestone, not a production deployment. Before launch, configure HTTPS, secure secret management, persistent/object file storage, backups, monitoring, refresh-token rotation/password recovery, durable webhook delivery, and a shared event broker for multi-instance SSE. Uploaded layout images currently use `backend/uploads` on local disk. Public website CORS origins must be explicitly configured in `PUBLIC_WEB_ORIGIN`.
 
 See [`agent.md`](./agent.md) for the implementation log, decisions, and remaining requirement checklist.
+
+### Website enquiries and lead follow-up
+
+A website can submit JSON to `POST /api/v1/public/enquiries` with `customer_name`, `mobile`, `project_id`, and `consent: true`; optional fields are `email`, `plot_id`, and `message`. The project must be active and have a published layout. Successful submissions return an enquiry reference and appear in the CRM lead list, subject to project and lead assignment permissions. Configure `PUBLIC_WEB_ORIGIN` for the website origin. This endpoint is rate limited but does not authenticate a particular website or deduplicate submissions.
+
+Staff with lead write access can update the status and notes of leads visible to them. Managers can access leads in assigned projects; sales executives and brokers are limited to leads assigned to them or associated with them. The update is audited.
+
+Google Forms, Meta ads, LinkedIn ads and WhatsApp are not connected yet. They require provider-specific authentication, verified webhook handling, a reliable delivery and retry strategy, and account configuration; WhatsApp also requires appropriate customer opt-in and approved templates where applicable.
+
+### Website API keys
+
+Administrators can open **Integrations**, create a website key for an active project, copy it once, and revoke it when needed. Apply migrations before using this feature (`pnpm db:migrate`). The key is stored as a hash and submissions are assigned to the key's project, regardless of fields supplied by the caller. An active project manager or sales manager assigned to that project is selected for the lead if available; otherwise the lead remains unassigned and visible to administrators and managers with project access.
+
+Call the CRM from your **website server**, using HTTPS and an `Authorization: Bearer <key>` header. Do not place the key in HTML or JavaScript sent to visitors. Example request body:
+
+```json
+{
+  "customer_name": "Example Customer",
+  "mobile": "+91 9876543210",
+  "email": "customer@example.com",
+  "message": "Interested in a plot",
+  "consent": true,
+  "external_id": "website-submission-123"
+}
+```
+
+Send it as JSON to `POST /api/v1/integrations/website-leads`. Name, mobile and explicit consent are required. Use a stable, unique `external_id` per submission: retries with the same key and ID return the existing enquiry reference without creating another lead. A new submission returns HTTP 201; a duplicate returns 200. The endpoint is rate limited. Keys work only while their project is active. Revoke a compromised key immediately and create a replacement; rotating the key resets the scope for deduplication.
+
+The integrations page lists Meta lead ads, WhatsApp, Google Forms and LinkedIn ads as planned channels; no provider connection or messaging automation is implemented yet.

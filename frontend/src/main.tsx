@@ -10,6 +10,7 @@ import { leadsPage } from './pages/LeadsPage';
 import { bookingsPage } from './pages/BookingsPage';
 import { teamPage } from './pages/TeamPage';
 import { settingsPage } from './pages/SettingsPage';
+import { integrationsPage, type WebsiteKey } from './pages/IntegrationsPage';
 
 const root = document.querySelector<HTMLDivElement>('#root')!;
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -21,6 +22,7 @@ const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (
 })[character]!);
 let currentUser: User | null = null;
 let projects: Project[] = [];
+let currentLeads: Lead[] = [];
 let currentPlots: Plot[] = [];
 let currentLayout: ProjectLayout | undefined;
 let masterplanDrawing = false;
@@ -28,7 +30,7 @@ let masterplanPoints: [number, number][] = [];
 let masterplanImageObjectUrl: string | null = null;
 
 const showToast = (message: string, error = false) => { const toast = document.querySelector('#toast'); if (!toast) return; toast.textContent = message; toast.className = `toast show ${error ? 'error' : ''}`; window.setTimeout(() => { toast.className = 'toast'; }, 3500); };
-const viewFromHash = (): View => { const view = location.hash.split('/')[0].replace('#', ''); return ['dashboard', 'projects', 'leads', 'bookings', 'team', 'settings'].includes(view) ? view as View : 'dashboard'; };
+const viewFromHash = (): View => { const view = location.hash.split('/')[0].replace('#', ''); return ['dashboard', 'projects', 'leads', 'bookings', 'team', 'settings', 'integrations'].includes(view) ? view as View : 'dashboard'; };
 const can = (permission: string) => currentUser?.permissions.includes('*') || currentUser?.permissions.includes(permission);
 
 async function renderApp() {
@@ -56,9 +58,10 @@ async function renderApp() {
       );
       layoutImagePath = currentLayout?.image_url;
     }
-    if (view === 'leads') body = leadsPage(await api<Lead[]>('/leads'));
+    if (view === 'leads') { currentLeads = await api<Lead[]>('/leads'); body = leadsPage(currentLeads, Boolean(can('leads:write'))); }
     if (view === 'bookings') body = bookingsPage(await api<Booking[]>('/bookings'), Boolean(can('bookings:approve')));
     if (view === 'team') { if (currentUser.role !== 'ADMIN') { location.hash = '#dashboard'; return; } projects = await api<Project[]>('/projects'); body = teamPage(await api<User[]>('/users'), projects); }
+    if (view === 'integrations') { if (currentUser.role !== 'ADMIN') { location.hash = '#dashboard'; return; } projects = await api<Project[]>('/projects'); body = integrationsPage(await api<WebsiteKey[]>('/integrations/website-keys')); }
     if (view === 'settings') body = settingsPage();
   } catch (error) { body = `<div class="error-panel"><h2>Unable to load this page</h2><p>${error instanceof Error ? error.message : 'Please refresh and try again.'}</p></div>`; }
   root.innerHTML = appShell(currentUser, view, body);
@@ -129,7 +132,19 @@ function bindPageActions() {
   document.querySelector('#publish-layout')?.addEventListener('click', publishMasterplan);
   document.querySelector<SVGSVGElement>('#masterplan-map')?.addEventListener('click', handleMasterplanClick);
   document.querySelector('#new-lead')?.addEventListener('click', showLeadForm);
+  document.querySelectorAll<HTMLButtonElement>('[data-edit-lead]').forEach((button) => button.addEventListener('click', () => {
+    const lead = currentLeads.find((item) => item.id === button.dataset.editLead);
+    if (!lead) return;
+    const statuses = ['NEW', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'CONVERTED', 'LOST'];
+    openDialog('Update lead', `<label>Status<select name="lead_status">${statuses.map((status) => `<option value="${status}" ${lead.lead_status === status ? 'selected' : ''}>${status.replaceAll('_', ' ')}</option>`).join('')}</select></label><label class="full-width">Notes<textarea name="remarks" maxlength="1000">${escapeHtml(lead.remarks)}</textarea></label>`, async (form) => { await api(`/leads/${lead.id}`, { method: 'PATCH', body: JSON.stringify(Object.fromEntries(form)) }); });
+  }));
   document.querySelector('#invite-user')?.addEventListener('click', showUserForm);
+  document.querySelector('#create-api-key')?.addEventListener('click', showWebsiteKeyForm);
+  document.querySelectorAll<HTMLButtonElement>('[data-revoke-key]').forEach((button) => button.addEventListener('click', async () => {
+    if (!confirm('Revoke this key? The connected website will no longer be able to send leads with it.')) return;
+    try { await api(`/integrations/website-keys/${button.dataset.revokeKey}`, { method: 'DELETE' }); await renderApp(); showToast('API key revoked.'); }
+    catch (error) { showToast(error instanceof Error ? error.message : 'Could not revoke key.', true); }
+  }));
 }
 
 async function loadMasterplanImage(imagePath: string) {
@@ -278,6 +293,23 @@ function openDialog(title: string, fields: string, submit: (form: FormData) => P
     try { await submit(form); close(); showToast(successMessage); renderApp(); }
     catch (error) { const target = event.currentTarget.querySelector('.dialog-error')!; target.textContent = error instanceof Error ? error.message : 'Could not save changes.'; submitButton.disabled = false; }
   });
+}
+
+function showWebsiteKeyForm() {
+  const active = projects.filter((project) => project.status === 'ACTIVE');
+  if (!active.length) return showToast('Create an active project before generating an API key.', true);
+  openDialog('Create website API key', `<label class="full-width">Key name<input required name="name" maxlength="100" placeholder="e.g. Main website enquiry form"></label><label class="full-width">Project<select name="project_id" required>${active.map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.project_name)}</option>`).join('')}</select></label><p class="integration-help full-width">The key will be shown once. Store it securely on your website server.</p>`, async (form) => {
+    const result = await api<{ key: string }>('/integrations/website-keys', { method: 'POST', body: JSON.stringify(Object.fromEntries(form)) });
+    // openDialog closes and refreshes after submit, so display the one-time secret separately.
+    window.setTimeout(() => showGeneratedKey(result.key), 0);
+  }, '', 'Create key', 'API key created.');
+}
+
+function showGeneratedKey(key: string) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="dialog-backdrop" id="generated-key-dialog"><div class="dialog"><div class="dialog-heading"><h2>Save your API key</h2></div><p class="full-width integration-help">Copy this key now. It will not be shown again. Store it on your website server, never in browser code.</p><label class="full-width">API key<input id="generated-key" readonly></label><p class="dialog-error" id="copy-key-message" role="status"></p><div class="dialog-actions"><button type="button" class="secondary-button" id="copy-key">Copy key</button><button type="button" class="primary-button" id="close-key">Done</button></div></div></div>`);
+  const input = document.querySelector<HTMLInputElement>('#generated-key')!; input.value = key;
+  document.querySelector('#copy-key')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(key); document.querySelector('#copy-key-message')!.textContent = 'Copied.'; } catch { input.focus(); input.select(); document.querySelector('#copy-key-message')!.textContent = 'Select and copy the key manually.'; } });
+  document.querySelector('#close-key')?.addEventListener('click', () => document.querySelector('#generated-key-dialog')?.remove());
 }
 
 function showProjectForm(project?: Project) {

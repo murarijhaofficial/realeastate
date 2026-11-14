@@ -1,0 +1,13 @@
+import { pageHeader } from '../components/PageHeader';
+
+export interface WebsiteKey { id: string; name: string; key_prefix: string; project_name: string; created_at: string; last_used_at: string | null; revoked_at: string | null }
+const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
+export function integrationsPage(keys: WebsiteKey[]) {
+  const providers = [['Meta lead ads', 'Receive leads from Facebook and Instagram campaigns.'], ['WhatsApp Business', 'Manage conversations and automated messages.'], ['Google Forms', 'Bring form submissions into the lead pipeline.'], ['LinkedIn ads', 'Capture leads from LinkedIn campaigns.']];
+  return `${pageHeader('Integrations', 'Connect your lead sources and manage access to your CRM.', '<button class="primary-button" id="create-api-key">+ Create website API key</button>')}
+    <section class="panel integration-website"><div class="panel-heading"><div><h2>Website lead API</h2><p>Create a key for each website and project. Send leads securely from your website server.</p></div><span class="status available">Available</span></div>
+    <div class="integration-tip"><strong>Keep keys private</strong><p>Use your website backend or server-side form handler. Never put an API key in browser code.</p></div>
+    ${keys.length ? `<div class="table-wrap"><table><thead><tr><th>Key</th><th>Project</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>${keys.map((key) => `<tr><td><strong>${escape(key.name)}</strong><small>${escape(key.key_prefix)}?</small></td><td>${escape(key.project_name)}</td><td>${key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}</td><td><span class="status ${key.revoked_at ? 'inactive' : 'available'}">${key.revoked_at ? 'Revoked' : 'Active'}</span></td><td>${key.revoked_at ? '' : `<button class="secondary-button" data-revoke-key="${escape(key.id)}">Revoke</button>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="integration-empty">No website keys yet. Create one to start receiving leads.</p>'}
+    <p class="integration-help">POST <code>/api/v1/integrations/website-leads</code> ? See the setup guide in the project README.</p></section>
+    <div class="integration-section-title"><h2>More channels</h2><p>These connections are not available yet.</p></div><div class="integration-grid">${providers.map(([name, description]) => `<article class="panel integration-card"><span class="setting-icon">?</span><h3>${name}</h3><p>${description}</p><span class="integration-pending">Not connected ? Setup coming later</span></article>`).join('')}</div>`;
+}

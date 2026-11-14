@@ -85,3 +85,23 @@ export const crmBookingSchema = z.object({
   }),
   remarks: z.string().trim().max(1000).optional(),
 });
+
+export const leadUpdateSchema = z.object({
+  lead_status: z.enum(['NEW', 'CONTACTED', 'QUALIFIED', 'SITE_VISIT', 'NEGOTIATION', 'CONVERTED', 'LOST']),
+  remarks: z.string().trim().max(1000).optional(),
+});
+
+export const publicEnquirySchema = z.object({
+  customer_name: z.string().trim().min(1).max(150),
+  mobile: z.string().trim().regex(/^[+()\d\s-]{7,20}$/),
+  email: z.union([z.string().trim().email().max(255), z.literal('')]).optional(),
+  project_id: idSchema,
+  plot_id: idSchema.optional(),
+  message: z.string().trim().max(1000).optional(),
+  consent: z.literal(true),
+});
+
+export const websiteKeySchema = z.object({ name: z.string().trim().min(1).max(100), project_id: idSchema });
+export const websiteLeadSchema = publicEnquirySchema.omit({ project_id: true, plot_id: true }).extend({
+  external_id: z.string().trim().min(1).max(150).optional(),
+});

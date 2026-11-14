@@ -14,7 +14,7 @@ import { pool, inTransaction } from './db.ts';
 import { authenticate, permissionsFor, requireProjectAccess } from './auth.ts';
 import { HttpError, asyncHandler } from './errors.ts';
 import { inventoryEvents, publishInventoryEvent } from './realtime.ts';
-import { crmBookingSchema, idSchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
+import { crmBookingSchema, idSchema, leadUpdateSchema, publicEnquirySchema, websiteKeySchema, websiteLeadSchema, parse, plotSchema, plotUpdateSchema, projectCreateSchema, projectSchema, publicBookingSchema, userSchema, userUpdateSchema } from './validation.ts';
 
 const app = express();
 const api = express.Router();
@@ -809,12 +809,74 @@ api.get('/customers', ...authRoute(async (req, res) => {
   res.json({ success: true, data: result.rows });
 }));
 
+// API keys are administrator-managed, project-scoped and stored only as hashes.
+api.get('/integrations/website-keys', ...authRoute(async (req, res) => {
+  if (req.user.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only administrators can manage integrations.');
+  const result = await pool.query(`SELECT k.id, k.name, k.key_prefix, k.project_id, p.project_name, k.created_at, k.last_used_at, k.revoked_at
+    FROM website_api_keys k JOIN projects p ON p.id = k.project_id ORDER BY k.created_at DESC`);
+  res.set('Cache-Control', 'no-store').json({ success: true, data: result.rows });
+}));
+
+api.post('/integrations/website-keys', ...authRoute(async (req, res) => {
+  if (req.user.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only administrators can manage integrations.');
+  const data = parse(websiteKeySchema, req.body);
+  const key = `ed_live_${crypto.randomBytes(32).toString('base64url')}`;
+  const hash = crypto.createHash('sha256').update(key).digest('hex');
+  const result = await inTransaction(async (client) => {
+    const project = await client.query("SELECT id FROM projects WHERE id = $1 AND status = 'ACTIVE'", [data.project_id]);
+    if (!project.rowCount) throw new HttpError(404, 'PROJECT_NOT_FOUND', 'Active project not found.');
+    const created = await client.query(`INSERT INTO website_api_keys (name, key_prefix, key_hash, project_id, created_by)
+      VALUES ($1,$2,$3,$4,$5) RETURNING id, name, key_prefix, project_id, created_at`,
+      [data.name, key.slice(0, 16), hash, data.project_id, req.user.id]);
+    await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'WEBSITE_KEY_CREATED', 'integrations', 'website_api_key', created.rows[0].id]);
+    return created.rows[0];
+  });
+  res.set('Cache-Control', 'no-store').status(201).json({ success: true, data: { ...result, key } });
+}));
+
+api.delete('/integrations/website-keys/:keyId', ...authRoute(async (req, res) => {
+  if (req.user.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Only administrators can manage integrations.');
+  const id = parse(idSchema, req.params.keyId);
+  await inTransaction(async (client) => {
+    const result = await client.query('UPDATE website_api_keys SET revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL RETURNING id', [id]);
+    if (!result.rowCount) throw new HttpError(404, 'KEY_NOT_FOUND', 'Active API key not found.');
+    await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'WEBSITE_KEY_REVOKED', 'integrations', 'website_api_key', id]);
+  });
+  res.json({ success: true, data: { revoked: true } });
+}));
+
+api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, res) => {
+  const token = req.get('authorization')?.match(/^Bearer (ed_live_[A-Za-z0-9_-]{43})$/)?.[1];
+  if (!token) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
+  const hash = crypto.createHash('sha256').update(token).digest('hex');
+  const data = parse(websiteLeadSchema, req.body);
+  const result = await inTransaction(async (client) => {
+    // The lock serializes retries for a key and makes revocation effective for subsequent requests.
+    const keys = await client.query(`SELECT k.id, k.project_id FROM website_api_keys k JOIN projects p ON p.id = k.project_id
+      WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND p.status = 'ACTIVE' FOR UPDATE OF k`, [hash]);
+    if (!keys.rowCount) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
+    const key = keys.rows[0];
+    if (data.external_id) {
+      const existing = await client.query(`SELECT l.lead_code FROM website_lead_receipts r JOIN leads l ON l.id = r.lead_id WHERE r.api_key_id = $1 AND r.external_id = $2`, [key.id, data.external_id]);
+      if (existing.rowCount) return { lead_code: existing.rows[0].lead_code, duplicate: true };
+    }
+    const customers = await client.query('SELECT id FROM customers WHERE mobile = $1 ORDER BY created_at LIMIT 1', [data.mobile]);
+    const customer = customers.rowCount ? customers.rows[0] : (await client.query('INSERT INTO customers (full_name, mobile, email) VALUES ($1,$2,$3) RETURNING id', [data.customer_name, data.mobile, data.email || null])).rows[0];
+    const assignee = await client.query(`SELECT u.id FROM users u JOIN user_projects up ON up.user_id = u.id
+      WHERE up.project_id = $1 AND u.is_active AND u.role IN ('PROJECT_MANAGER','SALES_MANAGER')
+      ORDER BY CASE u.role WHEN 'PROJECT_MANAGER' THEN 0 ELSE 1 END, u.id LIMIT 1`, [key.project_id]);
+    const lead = (await client.query(`INSERT INTO leads (customer_id, project_id, assigned_user_id, source, lead_status, remarks)
+      VALUES ($1,$2,$3,'WEBSITE','NEW',$4) RETURNING id, lead_code`, [customer.id, key.project_id, assignee.rows[0]?.id ?? null, data.message || null])).rows[0];
+    if (data.external_id) await client.query('INSERT INTO website_lead_receipts (api_key_id, external_id, lead_id) VALUES ($1,$2,$3)', [key.id, data.external_id, lead.id]);
+    await client.query('UPDATE website_api_keys SET last_used_at = NOW() WHERE id = $1', [key.id]);
+    await client.query('INSERT INTO audit_logs (action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4)', ['WEBSITE_API_LEAD_CREATED', 'leads', 'lead', lead.id]);
+    return { lead_code: lead.lead_code, duplicate: false };
+  });
+  res.set('Cache-Control', 'no-store').status(result.duplicate ? 200 : 201).json({ success: true, data: { enquiry_id: result.lead_code, duplicate: result.duplicate } });
+}));
+
 api.post('/public/enquiries', publicLimiter, asyncHandler(async (req, res) => {
-  if (req.body.consent !== true) throw new HttpError(400, 'CONSENT_REQUIRED', 'Customer consent is required.');
-  const { customer_name, mobile, email, project_id, plot_id, message } = req.body;
-  if (!customer_name || !/^[+()\d\s-]{7,20}$/.test(mobile ?? '') || !project_id) throw new HttpError(400, 'VALIDATION_ERROR', 'A name, valid mobile number, and project are required.');
-  parse(idSchema, project_id);
-  if (plot_id) parse(idSchema, plot_id);
+  const { customer_name, mobile, email, project_id, plot_id, message } = parse(publicEnquirySchema, req.body);
   const result = await inTransaction(async (client) => {
     const project = await client.query(
       `SELECT p.id FROM projects p WHERE p.id = $1 AND p.status = 'ACTIVE'
@@ -995,6 +1057,29 @@ api.get('/leads', ...authRoute(async (req, res) => {
     [req.user.role === 'ADMIN', req.user.id, !['BROKER', 'SALES_EXECUTIVE'].includes(req.user.role)],
   );
   res.json({ success: true, data: result.rows });
+}));
+
+api.patch('/leads/:leadId', ...authRoute(async (req, res) => {
+  if (!permissionsFor(req.user.role).some((permission) => permission === '*' || permission === 'leads:write')) throw new HttpError(403, 'FORBIDDEN', 'You cannot update leads.');
+  const leadId = parse(idSchema, req.params.leadId);
+  const data = parse(leadUpdateSchema, req.body);
+  const result = await inTransaction(async (client) => {
+    const lead = await client.query(
+      `SELECT l.id FROM leads l WHERE l.id = $1
+       AND ($2::boolean OR l.project_id IN (SELECT project_id FROM user_projects WHERE user_id = $3))
+       AND ($4::boolean OR l.assigned_user_id = $3 OR l.broker_id = $3) FOR UPDATE`,
+      [leadId, req.user.role === 'ADMIN', req.user.id, !['BROKER', 'SALES_EXECUTIVE'].includes(req.user.role)],
+    );
+    if (!lead.rowCount) throw new HttpError(404, 'LEAD_NOT_FOUND', 'Lead not found.');
+    const updated = await client.query(
+      'UPDATE leads SET lead_status = $2, remarks = $3, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [leadId, data.lead_status, data.remarks || null],
+    );
+    await client.query('INSERT INTO lead_activities (lead_id, user_id, activity_type, activity_notes) VALUES ($1,$2,$3,$4)', [leadId, req.user.id, 'LEAD_UPDATED', data.remarks || null]);
+    await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'LEAD_UPDATED', 'leads', 'lead', leadId]);
+    return updated.rows[0];
+  });
+  res.json({ success: true, data: result });
 }));
 
 api.post('/leads', ...authRoute(async (req, res) => {

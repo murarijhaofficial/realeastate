@@ -55,7 +55,7 @@ export interface ProjectLayout {
   image_url?: string;
   plots: LayoutPlot[];
 }
-export interface Lead { id: string; customer_name: string; mobile: string; project_name: string; source: string; lead_status: string; created_at: string }
+export interface Lead { id: string; customer_name: string; mobile: string; project_name: string; source: string; lead_status: string; remarks?: string | null; created_at: string }
 export interface Booking { id: string; booking_code: string; project_name: string; plot_number: string; customer_name: string; booking_status: string; source?: string; booking_amount?: number; submitted_at: string }
 export interface Dashboard {
   projects: number;
