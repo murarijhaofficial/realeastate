@@ -94,13 +94,13 @@ function bindPageActions() {
     const decision = button.dataset.decision; if (!decision || !confirm(`Are you sure you want to ${decision} this booking?`)) return;
     try { await api(`/bookings/${button.dataset.booking}/${decision}`, { method: 'POST', body: JSON.stringify({ reason: '' }) }); showToast(`Booking ${decision}d.`); renderApp(); } catch (error) { showToast(error instanceof Error ? error.message : 'Could not update booking.', true); }
   }));
-  document.querySelector('#new-project')?.addEventListener('click', showProjectForm);
+  document.querySelector('#new-project')?.addEventListener('click', () => showProjectForm());
   document.querySelector('#edit-project')?.addEventListener('click', () => {
     const projectId = projectIdFromHash();
     const project = projects.find((item) => item.id === projectId);
     if (project) showProjectForm(project);
   });
-  document.querySelector('#new-plot')?.addEventListener('click', showPlotForm);
+  document.querySelector('#new-plot')?.addEventListener('click', () => showPlotForm());
   document.querySelectorAll<HTMLButtonElement>('[data-edit-plot]').forEach((button) => {
     button.addEventListener('click', () => {
       const plot = currentPlots.find((item) => item.id === button.dataset.editPlot);
@@ -300,9 +300,14 @@ function openDialog(title: string, fields: string, submit: (form: FormData) => P
   const close = () => document.querySelector('.dialog-backdrop')?.remove();
   document.querySelectorAll('.close-dialog').forEach((button) => button.addEventListener('click', close));
   document.querySelector<HTMLFormElement>('#workspace-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault(); const form = new FormData(event.currentTarget); const submitButton = event.currentTarget.querySelector<HTMLButtonElement>('.primary-button')!; submitButton.disabled = true;
+    event.preventDefault();
+    const formElement = event.currentTarget as HTMLFormElement;
+    const form = new FormData(formElement);
+    const submitButton = formElement.querySelector<HTMLButtonElement>('.primary-button')!;
+    formElement.querySelector('.dialog-error')!.textContent = '';
+    submitButton.disabled = true;
     try { await submit(form); close(); showToast(successMessage); renderApp(); }
-    catch (error) { const target = event.currentTarget.querySelector('.dialog-error')!; target.textContent = error instanceof Error ? error.message : 'Could not save changes.'; submitButton.disabled = false; }
+    catch (error) { const target = formElement.querySelector('.dialog-error')!; target.textContent = error instanceof Error ? error.message : 'Could not save changes.'; submitButton.disabled = false; }
   });
 }
 
@@ -324,6 +329,7 @@ function showGeneratedKey(key: string) {
 }
 
 function showProjectForm(project?: Project) {
+  if (!project && currentUser?.role !== 'ADMIN') return showToast('Only an administrator can create projects.', true);
   if (!can('projects:write')) return showToast('You do not have permission to manage projects.', true);
   const value = (input: unknown) => escapeHtml(input ?? '');
   const selected = (field: keyof Project, option: string, fallback = '') => (project?.[field] ?? fallback) === option ? 'selected' : '';

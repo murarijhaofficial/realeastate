@@ -124,3 +124,8 @@ See `README.md`. Quick start:
 ### 2026-11-14 ? Website retrieval API
 
 - Added authenticated, key-scoped website lead retrieval, pagination, external ID filtering and automatic receipt tracking for new submissions without external IDs. Updated setup guidance and API tests.
+
+### 2026-11-14 ? Project creation fix
+
+- Fixed New Project and Add Plot listeners passing click events as existing records, which incorrectly selected edit mode.
+- Retained the form element across asynchronous saves so server errors display and the submit button is re-enabled. Creation permission messaging now matches the administrator-only API.
