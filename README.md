@@ -148,3 +148,15 @@ Call the CRM from your **website server**, using HTTPS and an `Authorization: Be
 Send it as JSON to `POST /api/v1/integrations/website-leads`. Name, mobile and explicit consent are required. Use a stable, unique `external_id` per submission: retries with the same key and ID return the existing enquiry reference without creating another lead. A new submission returns HTTP 201; a duplicate returns 200. The endpoint is rate limited. Keys work only while their project is active. Revoke a compromised key immediately and create a replacement; rotating the key resets the scope for deduplication.
 
 The integrations page lists Meta lead ads, WhatsApp, Google Forms and LinkedIn ads as planned channels; no provider connection or messaging automation is implemented yet.
+
+
+### Retrieve website submissions
+
+Use your website server with `Authorization: Bearer YOUR_WEBSITE_KEY`:
+
+- `POST /api/v1/integrations/website-leads` accepts `customer_name`, `mobile`, optional `email` and `message`, `consent: true`, and a unique `external_id`. Retry using the same external ID.
+- `GET /api/v1/integrations/website-leads?limit=50&offset=0` returns `data.leads` and `data.next_offset`. Continue until next_offset is null. Optional `external_id` filters one submission.
+- Returned fields: enquiry_id, external_id, customer_name, mobile, email, lead_status, created_at, updated_at. Internal notes and other sources' leads are excluded.
+- Access is restricted to the originating key and active project. Revoked keys fail with 401. Keep keys server-side; never embed them in browser JavaScript.
+- New submissions without external_id are tracked automatically, but cannot be safely retried without duplicates. Older submissions without receipts cannot be attributed to a website key and are excluded.
+- Pagination is offset-based; concurrent submissions can shift pages. Deduplicate results by enquiry_id when synchronizing.

@@ -64,3 +64,5 @@
   .initial-plot-row { grid-column: 1; }
   .inventory-form-heading { align-items: flex-start; flex-direction: column; }
 }
+
+.masterplan-canvas [data-plot-id]:focus .masterplan-plot, .masterplan-canvas [data-plot-id]:hover .masterplan-plot { stroke: #102a43; stroke-width: 4; fill-opacity: .9; }

@@ -115,3 +115,12 @@ See `README.md`. Quick start:
 
 - Added admin-only integration screen and project-scoped, hashed website API keys with one-time display, revocation, audit logging and idempotent lead intake. Provider tiles explicitly identify unimplemented channels.
 - Added migration 006 and website server integration documentation.
+
+### 2026-11-14 ? Shared layout improvements
+
+- Added hover and keyboard focus plot details, periodic CRM inventory refresh, and published-layout selection for non-editors.
+- Enforced complete plot mapping and an image before publishing; new revisions retain the published image. Added in-app website lead request guidance. WhatsApp remains unimplemented.
+
+### 2026-11-14 ? Website retrieval API
+
+- Added authenticated, key-scoped website lead retrieval, pagination, external ID filtering and automatic receipt tracking for new submissions without external IDs. Updated setup guidance and API tests.

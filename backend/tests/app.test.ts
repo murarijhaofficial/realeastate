@@ -187,6 +187,7 @@ test('website API keys are admin-managed, project-scoped, deduplicate retries an
       if (sql.includes('INSERT INTO website_api_keys')) { keyHash = args[2]; return { rowCount: 1, rows: [{ id: keyId, name: args[0], key_prefix: args[1], project_id: args[3] }] }; }
       if (sql.includes('UPDATE website_api_keys SET revoked_at')) { revoked = true; return { rowCount: 1, rows: [{ id: keyId }] }; }
       if (sql.includes('SELECT k.id, k.project_id')) return { rowCount: !revoked && args[0] === keyHash ? 1 : 0, rows: !revoked && args[0] === keyHash ? [{ id: keyId, project_id: projectId }] : [] };
+      if (sql.includes('SELECT l.lead_code AS enquiry_id')) { assert.equal(args[0], keyId); assert.equal(args[1], projectId); return { rowCount: 1, rows: [{ enquiry_id: 'LD-TEST', lead_status: 'NEW' }] }; }
       if (sql.includes('SELECT l.lead_code FROM website_lead_receipts')) return { rowCount: receipt ? 1 : 0, rows: receipt ? [{ lead_code: 'LD-TEST' }] : [] };
       if (sql.includes('SELECT id FROM customers')) return { rowCount: 0, rows: [] };
       if (sql.includes('INSERT INTO customers')) return { rowCount: 1, rows: [{ id: userId }] };
@@ -213,7 +214,16 @@ test('website API keys are admin-managed, project-scoped, deduplicate retries an
     assert.equal(retry.status, 200);
     assert.equal(retry.body.data.duplicate, true);
     assert.equal(leadCount, 1);
+    const fetchLeads = () => request(app).get('/api/v1/integrations/website-leads').set('Authorization', `Bearer ${key}`);
+    const fetched = await fetchLeads();
+    assert.equal(fetched.status, 200);
+    assert.equal(fetched.body.data.leads[0].enquiry_id, 'LD-TEST');
+    assert.equal(fetched.body.data.next_offset, null);
+    assert.equal(fetched.headers['cache-control'], 'no-store');
+    assert.equal((await request(app).get('/api/v1/integrations/website-leads')).status, 401);
+    assert.equal((await request(app).get('/api/v1/integrations/website-leads?limit=101').set('Authorization', `Bearer ${key}`)).status, 400);
     assert.equal((await request(app).delete(`/api/v1/integrations/website-keys/${keyId}`).set('Authorization', auth)).status, 200);
     assert.equal((await submit()).status, 401);
+    assert.equal((await fetchLeads()).status, 401);
   } finally { pool.query = originalQuery; pool.connect = originalConnect; if (originalSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = originalSecret; }
 });

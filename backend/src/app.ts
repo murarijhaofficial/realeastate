@@ -592,7 +592,10 @@ async function createLayout(req, res) {
     }
     const result = await client.query(
       `INSERT INTO layouts (project_id, layout_name, image_url, image_width, image_height, version_number, created_by)
-       VALUES ($1, $2, $3, $4, $5,
+       VALUES ($1, $2,
+         COALESCE($3, (SELECT image_url FROM layouts WHERE project_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1)),
+         COALESCE($4, (SELECT image_width FROM layouts WHERE project_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1)),
+         COALESCE($5, (SELECT image_height FROM layouts WHERE project_id = $1 AND status = 'PUBLISHED' ORDER BY version_number DESC LIMIT 1)),
          (SELECT COALESCE(MAX(version_number), 0) + 1 FROM layouts WHERE project_id = $1), $6)
        RETURNING *`,
       [req.params.projectId, req.body.layout_name ?? 'Project layout', req.file ? `/uploads/${req.file.filename}` : null, Number(req.body.image_width) || null, Number(req.body.image_height) || null, req.user.id],
@@ -655,8 +658,13 @@ api.post('/layouts/:layoutId/publish', ...authRoute(async (req, res) => {
     const found = await client.query('SELECT * FROM layouts WHERE id = $1 FOR UPDATE', [layoutId]);
     if (!found.rowCount) throw new HttpError(404, 'LAYOUT_NOT_FOUND', 'Layout not found.');
     await requireProjectAccess(req.user, found.rows[0].project_id, client);
-    await client.query(`UPDATE layouts SET status = 'ARCHIVED' WHERE project_id = $1 AND status = 'PUBLISHED'`, [found.rows[0].project_id]);
     if (found.rows[0].status !== 'DRAFT') throw new HttpError(409, 'LAYOUT_NOT_DRAFT', 'Only a draft layout can be published.');
+    if (!found.rows[0].image_url) throw new HttpError(400, 'LAYOUT_INCOMPLETE', 'Upload a layout image before publishing.');
+    const coverage = await client.query(`SELECT COUNT(*)::int AS total, COUNT(pl.id)::int AS mapped
+      FROM plots p LEFT JOIN plot_layouts pl ON pl.plot_id = p.id AND pl.layout_id = $2
+      WHERE p.project_id = $1`, [found.rows[0].project_id, layoutId]);
+    if (!coverage.rows[0].total || coverage.rows[0].mapped !== coverage.rows[0].total) throw new HttpError(400, 'LAYOUT_INCOMPLETE', 'Map every plot before publishing the layout.');
+    await client.query(`UPDATE layouts SET status = 'ARCHIVED' WHERE project_id = $1 AND status = 'PUBLISHED'`, [found.rows[0].project_id]);
     const published = await client.query(`UPDATE layouts SET status = 'PUBLISHED', published_by = $2, published_at = NOW() WHERE id = $1 RETURNING *`, [layoutId, req.user.id]);
     await client.query('INSERT INTO audit_logs (user_id, action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4,$5)', [req.user.id, 'LAYOUT_PUBLISHED', 'layouts', 'layout', layoutId]);
     return published;
@@ -845,6 +853,31 @@ api.delete('/integrations/website-keys/:keyId', ...authRoute(async (req, res) =>
   res.json({ success: true, data: { revoked: true } });
 }));
 
+// Website credentials only expose submissions received through that credential.
+api.get('/integrations/website-leads', publicLimiter, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const token = req.get('authorization')?.match(/^Bearer (ed_live_[A-Za-z0-9_-]{43})$/)?.[1];
+  if (!token) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
+  const limit = Number(req.query.limit ?? 50);
+  const offset = Number(req.query.offset ?? 0);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) throw new HttpError(400, 'INVALID_PAGINATION', 'limit must be 1?100 and offset must be a non-negative integer.');
+  if (req.query.external_id !== undefined && (typeof req.query.external_id !== 'string' || req.query.external_id.length > 150)) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid external_id.');
+  const result = await inTransaction(async (client) => {
+    const keys = await client.query(`SELECT k.id, k.project_id FROM website_api_keys k JOIN projects p ON p.id = k.project_id
+      WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND p.status = 'ACTIVE' FOR UPDATE OF k`, [crypto.createHash('sha256').update(token).digest('hex')]);
+    if (!keys.rowCount) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
+    const key = keys.rows[0];
+    const leads = await client.query(`SELECT l.lead_code AS enquiry_id, r.external_id, c.full_name AS customer_name,
+      c.mobile, c.email, l.lead_status, l.created_at, l.updated_at
+      FROM website_lead_receipts r JOIN leads l ON l.id = r.lead_id JOIN customers c ON c.id = l.customer_id
+      WHERE r.api_key_id = $1 AND l.project_id = $2 AND ($3::text IS NULL OR r.external_id = $3)
+      ORDER BY l.created_at DESC, l.id DESC LIMIT $4 OFFSET $5`, [key.id, key.project_id, req.query.external_id ?? null, limit + 1, offset]);
+    await client.query('UPDATE website_api_keys SET last_used_at = NOW() WHERE id = $1', [key.id]);
+    return { leads: leads.rows.slice(0, limit), next_offset: leads.rows.length > limit ? offset + limit : null };
+  });
+  res.json({ success: true, data: result });
+}));
+
 api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, res) => {
   const token = req.get('authorization')?.match(/^Bearer (ed_live_[A-Za-z0-9_-]{43})$/)?.[1];
   if (!token) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
@@ -867,7 +900,7 @@ api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, 
       ORDER BY CASE u.role WHEN 'PROJECT_MANAGER' THEN 0 ELSE 1 END, u.id LIMIT 1`, [key.project_id]);
     const lead = (await client.query(`INSERT INTO leads (customer_id, project_id, assigned_user_id, source, lead_status, remarks)
       VALUES ($1,$2,$3,'WEBSITE','NEW',$4) RETURNING id, lead_code`, [customer.id, key.project_id, assignee.rows[0]?.id ?? null, data.message || null])).rows[0];
-    if (data.external_id) await client.query('INSERT INTO website_lead_receipts (api_key_id, external_id, lead_id) VALUES ($1,$2,$3)', [key.id, data.external_id, lead.id]);
+    await client.query('INSERT INTO website_lead_receipts (api_key_id, external_id, lead_id) VALUES ($1,$2,$3)', [key.id, data.external_id ?? `generated:${crypto.randomUUID()}`, lead.id]);
     await client.query('UPDATE website_api_keys SET last_used_at = NOW() WHERE id = $1', [key.id]);
     await client.query('INSERT INTO audit_logs (action, module, entity_type, entity_id) VALUES ($1,$2,$3,$4)', ['WEBSITE_API_LEAD_CREATED', 'leads', 'lead', lead.id]);
     return { lead_code: lead.lead_code, duplicate: false };

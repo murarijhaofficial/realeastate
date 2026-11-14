@@ -2,6 +2,7 @@ import './styles/app.css';
 import './styles/project-forms.css';
 import { api, apiAsset, isAuthorized, login, logout } from './lib/api';
 import type { Booking, Dashboard, Lead, Plot, Project, ProjectLayout, User } from './lib/types';
+import { money } from './lib/types';
 import { appShell, type View } from './components/AppShell';
 import { loginPage } from './pages/LoginPage';
 import { dashboardPage } from './pages/DashboardPage';
@@ -47,7 +48,7 @@ async function renderApp() {
       const plots: Plot[] = selected ? await api<Plot[]>(`/projects/${selected.id}/plots`) : [];
       const layouts: ProjectLayout[] = selected ? await api<ProjectLayout[]>(`/projects/${selected.id}/layouts`) : [];
       currentPlots = plots;
-      currentLayout = layouts.find((layout) => layout.status === 'DRAFT') ?? layouts.find((layout) => layout.status === 'PUBLISHED');
+      currentLayout = (['ADMIN', 'PROJECT_MANAGER'].includes(currentUser.role) ? layouts.find((layout) => layout.status === 'DRAFT') : undefined) ?? layouts.find((layout) => layout.status === 'PUBLISHED');
       body = projectsPage(
         projects,
         selected,
@@ -131,6 +132,16 @@ function bindPageActions() {
   document.querySelector('#cancel-boundary')?.addEventListener('click', cancelMasterplanDrawing);
   document.querySelector('#publish-layout')?.addEventListener('click', publishMasterplan);
   document.querySelector<SVGSVGElement>('#masterplan-map')?.addEventListener('click', handleMasterplanClick);
+  document.querySelectorAll<SVGGElement>('#masterplan-map [data-plot-id]').forEach((element) => {
+    const showDetails = () => {
+      if (masterplanDrawing) return;
+      const plot = currentPlots.find((item) => item.id === element.dataset.plotId);
+      const message = document.querySelector<HTMLElement>('#masterplan-message');
+      if (plot && message) message.textContent = `Plot ${plot.plot_number} ? ${plot.status.replaceAll('_', ' ')}${plot.area_sq_yard ? ` ? ${plot.area_sq_yard} sq yd` : ''}${plot.current_price ? ` ? ${money(plot.current_price)}` : ''}`;
+    };
+    element.addEventListener('pointerenter', showDetails);
+    element.addEventListener('focus', showDetails);
+  });
   document.querySelector('#new-lead')?.addEventListener('click', showLeadForm);
   document.querySelectorAll<HTMLButtonElement>('[data-edit-lead]').forEach((button) => button.addEventListener('click', () => {
     const lead = currentLeads.find((item) => item.id === button.dataset.editLead);
@@ -486,3 +497,14 @@ function showUserForm() {
 window.addEventListener('hashchange', () => { if (currentUser) renderApp(); });
 async function start() { if (!isAuthorized()) return renderLogin(); try { currentUser = await api<User>('/auth/me'); if (!location.hash) location.hash = '#dashboard'; await renderApp(); } catch { await logout(); renderLogin('Your session has expired. Please sign in again.'); } }
 start();
+
+// Refresh shared inventory while the project view is open without interrupting edits.
+window.setInterval(async () => {
+  if (!currentUser || viewFromHash() !== 'projects' || masterplanDrawing || document.querySelector('.dialog-backdrop')) return;
+  const projectId = projectIdFromHash();
+  if (!projectId) return;
+  try {
+    const latest = await api<Plot[]>(`/projects/${projectId}/plots`);
+    if (viewFromHash() === 'projects' && projectIdFromHash() === projectId && !masterplanDrawing && !document.querySelector('.dialog-backdrop') && JSON.stringify(latest) !== JSON.stringify(currentPlots)) await renderApp();
+  } catch { /* Retain the last displayed inventory until the next successful refresh. */ }
+}, 30000);
