@@ -875,7 +875,7 @@ api.delete('/integrations/website-keys/:keyId', ...authRoute(async (req, res) =>
 // Website credentials only expose submissions received through that credential.
 api.get('/integrations/website-leads', publicLimiter, asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  const token = req.get('authorization')?.match(/^Bearer (ed_live_[A-Za-z0-9_-]{43})$/)?.[1];
+  const token = req.get('authorization')?.trim().match(/^Bearer\s+(ed_live_[A-Za-z0-9_-]{43})$/i)?.[1];
   if (!token) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
   const limit = Number(req.query.limit ?? 50);
   const offset = Number(req.query.offset ?? 0);
@@ -898,7 +898,7 @@ api.get('/integrations/website-leads', publicLimiter, asyncHandler(async (req, r
 }));
 
 api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, res) => {
-  const token = req.get('authorization')?.match(/^Bearer (ed_live_[A-Za-z0-9_-]{43})$/)?.[1];
+  const token = req.get('authorization')?.trim().match(/^Bearer\s+(ed_live_[A-Za-z0-9_-]{43})$/i)?.[1];
   if (!token) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   const result = await inTransaction(async (client) => {
@@ -907,7 +907,7 @@ api.post('/integrations/website-leads', publicLimiter, asyncHandler(async (req, 
       WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND p.status = 'ACTIVE' FOR UPDATE OF k`, [hash]);
     if (!keys.rowCount) throw new HttpError(401, 'INVALID_API_KEY', 'A valid website API key is required.');
     const key = keys.rows[0];
-    const data = mapWebsiteLead(req.body, key.field_mapping ?? {});
+    const data = mapWebsiteLead(req.body, req.get('X-EstateDesk-Format') === 'canonical' ? {} : key.field_mapping ?? {});
     if (data.external_id) {
       const existing = await client.query(`SELECT l.lead_code FROM website_lead_receipts r JOIN leads l ON l.id = r.lead_id WHERE r.api_key_id = $1 AND r.external_id = $2`, [key.id, data.external_id]);
       if (existing.rowCount) return { lead_code: existing.rows[0].lead_code, duplicate: true };

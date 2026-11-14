@@ -143,3 +143,12 @@ See `README.md`. Quick start:
 
 - Added bridge delivery from chatbot and property enquiry handlers, enforced consent, canonical CRM payloads, Bearer key normalization, response confirmation, atomic queue claiming and interruption recovery. Packaged replacements under wordpress-plugin/repaired.
 - Six PHP files passed syntax parsing; ZIP integrity checked. No PHP runtime/WordPress execution tests available. Khushii Enquiry Pro source and live deployment verification remain missing.
+
+### 2026-11-14 ? Plugin delivery regression review
+
+- Added immediate initial bridge delivery with cron fallback, canonical-format negotiation with CRM, normalized base URL configuration, case-insensitive Bearer parsing, stricter receipt checks and removed misleading ignored UI controls.
+- Executed 11 PHP behavior assertions with WordPress/HTTP/database doubles using checksum-verified portable PHP. This is not a live WordPress test.
+
+### 2026-11-14 ? Chatbot stale delivery label
+
+- Chatbot admin now reads bridge queue status/error instead of permanently displaying queued. Packaged Bridge 1.1.3 and Chatbot 1.1.7. Thirteen PHP behavior assertions and PHP lint passed; live delivery still unverified.

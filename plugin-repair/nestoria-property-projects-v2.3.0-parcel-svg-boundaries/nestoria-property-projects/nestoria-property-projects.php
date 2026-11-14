@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Nestoria Property Projects
  * Description: Property project listings, responsive project detail pages, and booking/enquiry management with email and WhatsApp integration.
- * Version: 2.3.1
+ * Version: 2.3.2
  * Author: Custom Website Plugin
  * Text Domain: nestoria-property-projects
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 final class NPP_Nestoria_Property_Projects {
-    const VERSION = '2.3.1';
+    const VERSION = '2.3.2';
     const PROJECT = 'npp_project';
     const LEAD = 'npp_lead';
     const NONCE_ACTION = 'npp_submit_enquiry';

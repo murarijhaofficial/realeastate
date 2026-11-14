@@ -1,0 +1,9 @@
+Delivery repair update
+
+Install updated CRM backend first. Bridge 1.1.2 declares canonical JSON so saved custom mappings do not break standard payloads. Activate bridge before testing source plugins. Configure the actual HTTPS backend and active ed_live_ website key. A backend base URL is expanded automatically. Keep all plugin folders/data when replacing versions.
+
+Initial delivery is attempted on request shutdown, with cron retained for retries. Reliable WordPress cron is still necessary for recovery. Synced requires a valid LD- enquiry reference. Source plugin status queued is not proof of delivery; inspect the bridge queue. All submissions use the project associated with the configured key.
+
+11 PHP behavior assertions passed using WordPress/HTTP/database doubles; six production PHP files passed PHP runtime lint. CRM backend tests passed. Live WordPress end-to-end verification remains required. No code can correct an invalid/revoked key or unreachable backend automatically.
+
+Main homepage/contact handler Khushii Enquiry Pro remains unavailable and is not integrated by these repairs. Separate form resubmissions may still create new leads; retries of an existing bridge row reuse its external ID. No historical property lead backfill is performed.

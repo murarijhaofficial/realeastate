@@ -186,7 +186,7 @@ test('website API keys are admin-managed, project-scoped, deduplicate retries an
       if (sql.includes('SELECT id FROM projects')) return { rowCount: 1, rows: [{ id: projectId }] };
       if (sql.includes('INSERT INTO website_api_keys')) { keyHash = args[2]; return { rowCount: 1, rows: [{ id: keyId, name: args[0], key_prefix: args[1], project_id: args[3] }] }; }
       if (sql.includes('UPDATE website_api_keys SET revoked_at')) { revoked = true; return { rowCount: 1, rows: [{ id: keyId }] }; }
-      if (sql.includes('SELECT k.id, k.project_id')) return { rowCount: !revoked && args[0] === keyHash ? 1 : 0, rows: !revoked && args[0] === keyHash ? [{ id: keyId, project_id: projectId }] : [] };
+      if (sql.includes('SELECT k.id, k.project_id')) return { rowCount: !revoked && args[0] === keyHash ? 1 : 0, rows: !revoked && args[0] === keyHash ? [{ id: keyId, project_id: projectId, field_mapping: { customer_name: 'legacy.name' } }] : [] };
       if (sql.includes('SELECT l.lead_code AS enquiry_id')) { assert.equal(args[0], keyId); assert.equal(args[1], projectId); return { rowCount: 1, rows: [{ enquiry_id: 'LD-TEST', lead_status: 'NEW' }] }; }
       if (sql.includes('SELECT l.lead_code FROM website_lead_receipts')) return { rowCount: receipt ? 1 : 0, rows: receipt ? [{ lead_code: 'LD-TEST' }] : [] };
       if (sql.includes('SELECT id FROM customers')) return { rowCount: 0, rows: [] };
@@ -208,7 +208,7 @@ test('website API keys are admin-managed, project-scoped, deduplicate retries an
     assert.ok(key.startsWith('ed_live_'));
     assert.notEqual(keyHash, key);
     const payload = { customer_name: 'Taylor', mobile: '9876543210', consent: true, external_id: 'form-1', project_id: userId };
-    const submit = () => request(app).post('/api/v1/integrations/website-leads').set('Authorization', `Bearer ${key}`).send(payload);
+    const submit = () => request(app).post('/api/v1/integrations/website-leads').set('Authorization', `bearer ${key}`).set('X-EstateDesk-Format', 'canonical').send(payload);
     assert.equal((await submit()).status, 201);
     const retry = await submit();
     assert.equal(retry.status, 200);

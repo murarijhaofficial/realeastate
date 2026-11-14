@@ -169,3 +169,6 @@ Administrators can use Integrations ? Map JSON fields on each active website key
 Send one JSON lead object per request (not a batch array). Mobile numbers and external IDs must be strings, and consent must be the JSON boolean `true`. Unknown fields are discarded. Always supply a stable external ID for retry protection. Authentication errors (401) still require a valid website key; mapping does not bypass authentication.
 
 Migration 007 adds persistent per-key mappings. Deploy the backend and frontend together after applying migrations. Preview endpoint: admin-authenticated `POST /api/v1/integrations/website-mapping/preview` with `{ "mapping": {}, "sample": {} }`. Save endpoint: admin-authenticated `PUT /api/v1/integrations/website-keys/:keyId/mapping` with `{ "mapping": {} }`.
+
+
+EstateDesk-aware connectors can send `X-EstateDesk-Format: canonical` to validate standard CRM field names instead of applying a key's custom source mapping. Authentication, project scope and consent checks still apply. Khushii Bridge 1.1.2 sends this header. Deploy the CRM backend update before installing that bridge when custom mappings are configured.
